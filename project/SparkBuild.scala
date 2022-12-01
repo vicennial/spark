@@ -53,13 +53,14 @@ object BuildCommons {
     Seq("streaming", "streaming-kafka-0-10").map(ProjectRef(buildLocation, _))
 
   val connect = ProjectRef(buildLocation, "connect")
+  val connectProtobuf = ProjectRef(buildLocation, "connect-protobuf")
 
   val allProjects@Seq(
     core, graphx, mllib, mllibLocal, repl, networkCommon, networkShuffle, launcher, unsafe, tags, sketch, kvstore, _*
   ) = Seq(
     "core", "graphx", "mllib", "mllib-local", "repl", "network-common", "network-shuffle", "launcher", "unsafe",
     "tags", "sketch", "kvstore"
-  ).map(ProjectRef(buildLocation, _)) ++ sqlProjects ++ streamingProjects ++ Seq(connect)
+  ).map(ProjectRef(buildLocation, _)) ++ sqlProjects ++ streamingProjects ++ Seq(connect) ++ Seq(connectProtobuf)
 
   val optionallyEnabledProjects@Seq(kubernetes, mesos, yarn,
     sparkGangliaLgpl, streamingKinesisAsl,
@@ -402,7 +403,7 @@ object SparkBuild extends PomBuild {
   val mimaProjects = allProjects.filterNot { x =>
     Seq(
       spark, hive, hiveThriftServer, repl, networkCommon, networkShuffle, networkYarn,
-      unsafe, tags, tokenProviderKafka010, sqlKafka010, connect, protobuf
+      unsafe, tags, tokenProviderKafka010, sqlKafka010, connect, protobuf, connectProtobuf
     ).contains(x)
   }
 
@@ -444,6 +445,7 @@ object SparkBuild extends PomBuild {
   enable(Hive.settings)(hive)
 
   enable(SparkConnect.settings)(connect)
+  enable(SparkConnect.settings)(connectProtobuf)
 
   /* Protobuf settings */
   enable(SparkProtobuf.settings)(protobuf)
@@ -1241,10 +1243,10 @@ object Unidoc {
 
     (ScalaUnidoc / unidoc / unidocProjectFilter) :=
       inAnyProject -- inProjects(OldDeps.project, repl, examples, tools, kubernetes,
-        yarn, tags, streamingKafka010, sqlKafka010, connect, protobuf),
+        yarn, tags, streamingKafka010, sqlKafka010, connect, protobuf, connectProtobuf),
     (JavaUnidoc / unidoc / unidocProjectFilter) :=
       inAnyProject -- inProjects(OldDeps.project, repl, examples, tools, kubernetes,
-        yarn, tags, streamingKafka010, sqlKafka010, connect, protobuf),
+        yarn, tags, streamingKafka010, sqlKafka010, connect, protobuf, connectProtobuf),
 
     (ScalaUnidoc / unidoc / unidocAllClasspaths) := {
       ignoreClasspaths((ScalaUnidoc / unidoc / unidocAllClasspaths).value)
@@ -1330,6 +1332,7 @@ object CopyDependencies {
       // produce the shaded Jar which happens automatically in the case of Maven.
       // Later, when the dependencies are copied, we manually copy the shaded Jar only.
       val fid = (LocalProject("connect") / assembly).value
+      val fidSparkProtobuf = (LocalProject("connect-protobuf") / assembly).value
       val fidProtobuf = (LocalProject("protobuf") / assembly).value
 
       (Compile / dependencyClasspath).value.map(_.data)
@@ -1346,6 +1349,9 @@ object CopyDependencies {
           } else if (jar.getName.contains("spark-protobuf") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
             Files.copy(fidProtobuf.toPath, destJar.toPath)
+          } else if(jar.getName.contains("connect-protobuf") &&
+            !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
+            Files.copy(fidSparkProtobuf.toPath, destJar.toPath)
           } else {
             Files.copy(jar.toPath(), destJar.toPath())
           }
