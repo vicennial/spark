@@ -52,16 +52,16 @@ object BuildCommons {
   val streamingProjects@Seq(streaming, streamingKafka010) =
     Seq("streaming", "streaming-kafka-0-10").map(ProjectRef(buildLocation, _))
 
-  val connectCommon = ProjectRef(buildLocation, "connect-common")
-  val connect = ProjectRef(buildLocation, "connect")
-  val connectClient = ProjectRef(buildLocation, "connect-client")
+  val connectProjects@Seq(connectCommon, connect, connectClient, connectClientCompatibility) = Seq(
+    "connect-common", "connect", "connect-client", "connect-client-compatibility"
+  ).map(ProjectRef(buildLocation, _))
 
   val allProjects@Seq(
     core, graphx, mllib, mllibLocal, repl, networkCommon, networkShuffle, launcher, unsafe, tags, sketch, kvstore, _*
   ) = Seq(
     "core", "graphx", "mllib", "mllib-local", "repl", "network-common", "network-shuffle", "launcher", "unsafe",
     "tags", "sketch", "kvstore"
-  ).map(ProjectRef(buildLocation, _)) ++ sqlProjects ++ streamingProjects ++ Seq(connectCommon, connect, connectClient)
+  ).map(ProjectRef(buildLocation, _)) ++ sqlProjects ++ streamingProjects ++ connectProjects
 
   val optionallyEnabledProjects@Seq(kubernetes, mesos, yarn,
     sparkGangliaLgpl, streamingKinesisAsl,
@@ -403,7 +403,8 @@ object SparkBuild extends PomBuild {
   val mimaProjects = allProjects.filterNot { x =>
     Seq(
       spark, hive, hiveThriftServer, repl, networkCommon, networkShuffle, networkYarn,
-      unsafe, tags, tokenProviderKafka010, sqlKafka010, connectCommon, connect, connectClient, protobuf
+      unsafe, tags, tokenProviderKafka010, sqlKafka010, connectCommon, connect, connectClient,
+      connectClientCompatibility, protobuf
     ).contains(x)
   }
 
@@ -446,8 +447,8 @@ object SparkBuild extends PomBuild {
 
   enable(SparkConnectCommon.settings)(connectCommon)
   enable(SparkConnect.settings)(connect)
-//  enable(SparkConnectClient.settings)(connectClient)
-  enable(SparkConnectClientCompatibility.settings)(connectClient)
+  enable(SparkConnectClient.settings)(connectClient)
+  enable(SparkConnectClientCompatibility.settings)(connectClientCompatibility)
 
   /* Protobuf settings */
   enable(SparkProtobuf.settings)(protobuf)
@@ -885,58 +886,44 @@ object SparkConnectClient {
 }
 
 object SparkConnectClientCompatibility {
-  val clientModule = "spark-connect-client"
   lazy val settings = Seq(
-    libraryDependencies += "org.apache.spark" % clientModule % version.value % "assembly",
-    (assembly / assemblyJarName) := s"$clientModule-compatibility-${version.value}.jar",
-  )
-//  import BuildCommons.protoVersion
-//
-//  lazy val settings = Seq(
-//    libraryDependencies ++= {
-//      Seq(
-//        "com.google.protobuf" % "protobuf-java" % protoVersion % "protobuf"
-//      )
-//    },
-//
-//    dependencyOverrides ++= {
-//      Seq(
-//        "com.google.protobuf" % "protobuf-java" % protoVersion
-//      )
-//    },
-//
-//    (assembly / assemblyJarName) := s"${moduleName.value}-compatibility-${version.value}.jar",
-//
-//    (assembly / test) := { },
-//
-//    (assembly / logLevel) := Level.Info,
-//
-//    // Exclude `scala-library` from assembly.
-//    (assembly / assemblyPackageScala / assembleArtifact) := false,
-//
-//    // Exclude `pmml-model-*.jar`, `scala-collection-compat_*.jar`,`jsr305-*.jar` and
-//    // `netty-*.jar` and `unused-1.0.0.jar` from assembly.
-//    (assembly / assemblyExcludedJars) := {
-//      val cp = (assembly / fullClasspath).value
-//      cp filter { v =>
-//        val name = v.data.getName
-//        name.startsWith("pmml-model-") || name.startsWith("scala-collection-compat_") ||
-//          name.startsWith("jsr305-") || name.startsWith("netty-") || name == "unused-1.0.0.jar"
-//      }
-//    },
-//
-//    (assembly / assemblyShadeRules) := Seq(
-//      ShadeRule.rename("com.google.protobuf.**" -> "org.sparkproject.connect.protobuf.@1").inAll,
-//      ShadeRule.rename("org.apache.spark.sql.connect.client.**" -> "org.apache.spark.sql.@1").inAll,
-//    ),
-//
-//    (assembly / assemblyMergeStrategy) := {
-//      case m if m.toLowerCase(Locale.ROOT).endsWith("manifest.mf") => MergeStrategy.discard
-//      // Drop all proto files that are not needed as artifacts of the build.
-//      case m if m.toLowerCase(Locale.ROOT).endsWith(".proto") => MergeStrategy.discard
-//      case _ => MergeStrategy.first
-//    }
-//  )
+
+    (assembly / test) := { },
+
+    (assembly / logLevel) := Level.Info,
+
+    // Exclude `scala-library` from assembly.
+    (assembly / assemblyPackageScala / assembleArtifact) := false,
+
+    // Exclude `pmml-model-*.jar`, `scala-collection-compat_*.jar`,`jsr305-*.jar` and
+    // `netty-*.jar` and `unused-1.0.0.jar` from assembly.
+    (assembly / assemblyExcludedJars) := {
+      val cp = (assembly / fullClasspath).value
+      cp filter { v =>
+        val name = v.data.getName
+        name.startsWith("pmml-model-") || name.startsWith("scala-collection-compat_") ||
+          name.startsWith("jsr305-") || name.startsWith("netty-") || name == "unused-1.0.0.jar"
+      }
+    },
+
+    (assembly / assemblyShadeRules) := Seq(
+      ShadeRule.rename("org.apache.spark.sql.connect.client.**" -> "org.apache.spark.sql.@1").inAll,
+    ),
+
+    (assembly / assemblyMergeStrategy) := {
+      case m if m.toLowerCase(Locale.ROOT).endsWith("manifest.mf") => MergeStrategy.discard
+      // Drop all proto files that are not needed as artifacts of the build.
+      case m if m.toLowerCase(Locale.ROOT).endsWith(".proto") => MergeStrategy.discard
+      case _ => MergeStrategy.first
+    }
+  ) ++ {
+    Seq(
+      (Compile / PB.targets) := Seq(
+        PB.gens.java -> (Compile / sourceManaged).value,
+        PB.gens.plugin("grpc-java") -> (Compile / sourceManaged).value
+      )
+    )
+  }
 }
 
 object SparkProtobuf {
@@ -1533,9 +1520,6 @@ object CopyDependencies {
       // For the SparkConnect build, we manually call the assembly target to
       // produce the shaded Jar which happens automatically in the case of Maven.
       // Later, when the dependencies are copied, we manually copy the shaded Jar only.
-      val fid = (LocalProject("connect") / assembly).value
-      val fidClient = (LocalProject("connect-client") / assembly).value
-      val fidProtobuf = (LocalProject("protobuf") / assembly).value
 
       (Compile / dependencyClasspath).value.map(_.data)
         .filter { jar => jar.isFile() }
@@ -1547,12 +1531,19 @@ object CopyDependencies {
           }
           if (jar.getName.contains("spark-connect") &&
             !SbtPomKeys.profiles.value.contains("noshade-connect")) {
+            val fid = (LocalProject("connect") / assembly).value
             Files.copy(fid.toPath, destJar.toPath)
+          } else if (jar.getName.contains("connect-client-compatibility") &&
+            !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
+            val fidClient = (LocalProject("connect-client-compatibility") / assembly).value
+            Files.copy(fidClient.toPath, destJar.toPath)
           } else if (jar.getName.contains("connect-client") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
+            val fidClient = (LocalProject("connect-client") / assembly).value
             Files.copy(fidClient.toPath, destJar.toPath)
-          }  else if (jar.getName.contains("spark-protobuf") &&
+          } else if (jar.getName.contains("spark-protobuf") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
+            val fidProtobuf = (LocalProject("protobuf") / assembly).value
             Files.copy(fidProtobuf.toPath, destJar.toPath)
           } else {
             Files.copy(jar.toPath(), destJar.toPath())
@@ -1569,7 +1560,8 @@ object TestSettings {
   import BuildCommons._
   private val defaultExcludedTags = Seq("org.apache.spark.tags.ChromeUITest",
     "org.apache.spark.deploy.k8s.integrationtest.YuniKornTag",
-    "org.apache.spark.internal.io.cloud.IntegrationTestSuite")
+    "org.apache.spark.internal.io.cloud.IntegrationTestSuite",
+    "org.apache.spark.sql.connect.client.ConnectCompatibilityTest")
 
   lazy val settings = Seq (
     // Fork new JVMs for tests and set Java options for those
