@@ -52,8 +52,8 @@ object BuildCommons {
   val streamingProjects@Seq(streaming, streamingKafka010) =
     Seq("streaming", "streaming-kafka-0-10").map(ProjectRef(buildLocation, _))
 
-  val connectProjects@Seq(connectCommon, connect, connectClient, connectClientCompatibility) = Seq(
-    "connect-common", "connect", "connect-client", "connect-client-compatibility"
+  val connectProjects@Seq(connectCommon, connect, connectClient, connectClientCompatibility, connectClientTest) = Seq(
+    "connect-common", "connect", "connect-client", "connect-client-compatibility", "connect-client-test"
   ).map(ProjectRef(buildLocation, _))
 
   val allProjects@Seq(
@@ -404,7 +404,7 @@ object SparkBuild extends PomBuild {
     Seq(
       spark, hive, hiveThriftServer, repl, networkCommon, networkShuffle, networkYarn,
       unsafe, tags, tokenProviderKafka010, sqlKafka010, connectCommon, connect, connectClient,
-      connectClientCompatibility, protobuf
+      connectClientCompatibility, connectClientTest, protobuf
     ).contains(x)
   }
 
@@ -449,6 +449,7 @@ object SparkBuild extends PomBuild {
   enable(SparkConnect.settings)(connect)
   enable(SparkConnectClient.settings)(connectClient)
   enable(SparkConnectClientCompatibility.settings)(connectClientCompatibility)
+  enable(SparkConnectClientTest.settings)(connectClientTest)
 
   /* Protobuf settings */
   enable(SparkProtobuf.settings)(protobuf)
@@ -885,6 +886,14 @@ object SparkConnectClient {
   }
 }
 
+object SparkConnectClientTest {
+  lazy val settings = Seq(
+    (assembly / test) := {},
+    publish := {},
+  )
+}
+
+// TODO avoid copy past.
 object SparkConnectClientCompatibility {
   lazy val settings = Seq(
 
@@ -1432,10 +1441,12 @@ object Unidoc {
 
     (ScalaUnidoc / unidoc / unidocProjectFilter) :=
       inAnyProject -- inProjects(OldDeps.project, repl, examples, tools, kubernetes,
-        yarn, tags, streamingKafka010, sqlKafka010, connectCommon, connect, connectClient, protobuf),
+        yarn, tags, streamingKafka010, sqlKafka010, connectCommon, connect, connectClient,
+        connectClientCompatibility, connectClientTest, protobuf),
     (JavaUnidoc / unidoc / unidocProjectFilter) :=
       inAnyProject -- inProjects(OldDeps.project, repl, examples, tools, kubernetes,
-        yarn, tags, streamingKafka010, sqlKafka010, connectCommon, connect, connectClient, protobuf),
+        yarn, tags, streamingKafka010, sqlKafka010, connectCommon, connect, connectClient,
+        connectClientCompatibility, connectClientTest, protobuf),
 
     (ScalaUnidoc / unidoc / unidocAllClasspaths) := {
       ignoreClasspaths((ScalaUnidoc / unidoc / unidocAllClasspaths).value)
@@ -1520,6 +1531,10 @@ object CopyDependencies {
       // For the SparkConnect build, we manually call the assembly target to
       // produce the shaded Jar which happens automatically in the case of Maven.
       // Later, when the dependencies are copied, we manually copy the shaded Jar only.
+      val fid = (LocalProject("connect") / assembly).value
+      val fidClient = (LocalProject("connect-client") / assembly).value
+      val fidClientCompt = (LocalProject("connect-client-compatibility") / assembly).value
+      val fidProtobuf = (LocalProject("protobuf") / assembly).value
 
       (Compile / dependencyClasspath).value.map(_.data)
         .filter { jar => jar.isFile() }
@@ -1531,19 +1546,15 @@ object CopyDependencies {
           }
           if (jar.getName.contains("spark-connect") &&
             !SbtPomKeys.profiles.value.contains("noshade-connect")) {
-            val fid = (LocalProject("connect") / assembly).value
             Files.copy(fid.toPath, destJar.toPath)
           } else if (jar.getName.contains("connect-client-compatibility") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
-            val fidClient = (LocalProject("connect-client-compatibility") / assembly).value
-            Files.copy(fidClient.toPath, destJar.toPath)
+            Files.copy(fidClientCompt.toPath, destJar.toPath)
           } else if (jar.getName.contains("connect-client") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
-            val fidClient = (LocalProject("connect-client") / assembly).value
             Files.copy(fidClient.toPath, destJar.toPath)
           } else if (jar.getName.contains("spark-protobuf") &&
             !SbtPomKeys.profiles.value.contains("noshade-protobuf")) {
-            val fidProtobuf = (LocalProject("protobuf") / assembly).value
             Files.copy(fidProtobuf.toPath, destJar.toPath)
           } else {
             Files.copy(jar.toPath(), destJar.toPath())
@@ -1560,8 +1571,7 @@ object TestSettings {
   import BuildCommons._
   private val defaultExcludedTags = Seq("org.apache.spark.tags.ChromeUITest",
     "org.apache.spark.deploy.k8s.integrationtest.YuniKornTag",
-    "org.apache.spark.internal.io.cloud.IntegrationTestSuite",
-    "org.apache.spark.sql.connect.client.ConnectCompatibilityTest")
+    "org.apache.spark.internal.io.cloud.IntegrationTestSuite")
 
   lazy val settings = Seq (
     // Fork new JVMs for tests and set Java options for those

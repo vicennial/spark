@@ -104,6 +104,7 @@
     <module>connector/connect/common</module>
     <module>connector/connect/client</module>
     <module>connector/connect/client-compatibility</module>
+    <module>connector/connect/client-compatibility-test</module>
     <module>connector/protobuf</module>
     <!-- See additional modules enabled by profiles below -->
   </modules>
