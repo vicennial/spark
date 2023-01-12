@@ -59,6 +59,20 @@ class SparkConnectClient(
   }
 
   /**
+   * Builds a [[proto.AnalyzePlanRequest]] from `plan` and dispatched it to the Spark Connect
+   * server.
+   * @return
+   *   A [[proto.AnalyzePlanResponse]] from the Spark Connect server.
+   */
+  def analyze(plan: proto.Plan): proto.AnalyzePlanResponse = {
+    val request = proto.AnalyzePlanRequest.newBuilder()
+      .setPlan(plan)
+      .setUserContext(userContext)
+      .build()
+    analyze(request)
+  }
+
+  /**
    * Shutdown the client's connection to the server.
    */
   def shutdown(): Unit = {
