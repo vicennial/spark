@@ -18,30 +18,33 @@ package org.apache.spark.sql.connect.client
 
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
+import java.util.concurrent.TimeUnit
 import org.scalatest.BeforeAndAfterEach
-import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.funsuite.AnyFunSuite  // scalastyle:ignore funsuite
 
-import java.util.concurrent.TimeUnit // scalastyle:ignore funsuite
+import org.apache.spark.connect.proto
 
 class SparkSessionSuite
   extends AnyFunSuite // scalastyle:ignore funsuite
-  with BeforeAndAfterEach{
+  with BeforeAndAfterEach {
 
-  private var client: SparkConnectClient = _
   private var server: Server = _
+  private var service: DummySparkConnectService = _
+  private val SERVER_PORT = 15250
 
   private def startDummyServer(port: Int): Unit = {
+    service = new DummySparkConnectService()
     val sb = NettyServerBuilder
       .forPort(port)
-      .addService(new DummySparkConnectService())
+      .addService(service)
 
     server = sb.build
     server.start()
   }
+
   override def beforeEach(): Unit = {
     super.beforeEach()
-    client = null
-    server = null
+    startDummyServer(SERVER_PORT)
   }
 
   override def afterEach(): Unit = {
@@ -49,14 +52,54 @@ class SparkSessionSuite
       server.shutdownNow()
       assert(server.awaitTermination(5, TimeUnit.SECONDS), "server failed to shutdown")
     }
-
-    if (client != null) {
-      client.shutdown()
-    }
   }
 
-  test("SparkSession is") {
-    
+  test("SparkSession initialisation with connection string") {
+    val ss = SparkSession(s"sc://localhost:$SERVER_PORT")
+    val client = ss.client
+    val response = client.analyze(proto.Plan.newBuilder().build())
+    assert(response.getClientId == client.sessionId)
+  }
+
+  private def rangePlanCreator(
+      start: Long,
+      end: Long,
+      step: Long,
+      numPartitions: Option[Int]): proto.Plan = {
+    val builder = proto.Relation.newBuilder()
+    val rangeBuilder = builder.getRangeBuilder
+      .setStart(start)
+      .setEnd(end)
+      .setStep(step)
+    numPartitions.foreach(rangeBuilder.setNumPartitions)
+    proto.Plan.newBuilder().setRoot(builder).build()
+  }
+
+  private def testRange(
+      start: Long,
+      end: Long,
+      step: Long,
+      numPartitions: Option[Int],
+      failureHint: String): Unit = {
+    val expectedPlan = rangePlanCreator(start, end, step, numPartitions)
+    val actualPlan = service.getAndClearLatestInputPlan()
+    assert(actualPlan.equals(expectedPlan), failureHint)
+  }
+
+  test("range query") {
+    val ss = SparkSession(s"sc://localhost:$SERVER_PORT")
+
+    ss.range(10).analyze
+    testRange(0, 10, 1, None, "Case: range(10)")
+
+    ss.range(0, 20).analyze
+    testRange(0, 20, 1, None, "Case: range(0, 20)")
+
+    ss.range(6, 20, 3).analyze
+    testRange(6, 20, 3, None, "Case: range(6, 20, 3)")
+
+    ss.range(10, 100, 5, 2).analyze
+    testRange(10, 100, 5, Some(2), "Case: range(6, 20, 3, Some(2))")
   }
 
 }

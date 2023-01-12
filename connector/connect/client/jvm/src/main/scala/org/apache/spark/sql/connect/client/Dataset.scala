@@ -66,4 +66,6 @@ class Dataset(val session: SparkSession, private[client] val plan: proto.Plan)  
       .setInput(plan.getRoot)
       .setLimit(n)
   }
+
+  private[client] def analyze: proto.AnalyzePlanResponse = session.client.analyze(plan)
 }

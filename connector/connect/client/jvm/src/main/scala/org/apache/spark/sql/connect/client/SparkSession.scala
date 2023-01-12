@@ -76,9 +76,6 @@ class SparkSession private[client](val client: SparkConnectClient) {
     val plan = proto.Plan.newBuilder().setRoot(builder).build()
     new Dataset(this, plan)
   }
-
-  private[client] def analyze(plan: proto.Plan): proto.AnalyzePlanResponse =
-    client.analyze(plan)
 }
 
 object SparkSession {
