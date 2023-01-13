@@ -16,9 +16,50 @@
  */
 package org.apache.spark.sql.connect.client
 
-import org.apache.spark.connect.proto
+import scala.collection.JavaConverters._
 
+import org.apache.spark.connect.proto
+import org.apache.spark.sql.connect.client.Column.fn
+import org.apache.spark.sql.connect.client.functions.lit
+
+/**
+ * A column that will be computed based on the data in a `DataFrame`.
+ *
+ * A new column can be constructed based on the input columns present in a DataFrame:
+ *
+ * {{{
+ *   df("columnName")            // On a specific `df` DataFrame.
+ *   col("columnName")           // A generic column not yet associated with a DataFrame.
+ *   col("columnName.field")     // Extracting a struct field
+ *   col("`a.column.with.dots`") // Escape `.` in column names.
+ *   $"columnName"               // Scala short hand for a named column.
+ * }}}
+ *
+ * [[Column]] objects can be composed to form complex expressions:
+ *
+ * {{{
+ *   $"a" + 1
+ * }}}
+ *
+ * @since 3.4.0
+ */
 class Column private[client](private[client] val expr: proto.Expression) {
+
+  /**
+   * Sum of this expression and another expression.
+   * {{{
+   *   // Scala: The following selects the sum of a person's height and weight.
+   *   people.select( people("height") + people("weight") )
+   *
+   *   // Java:
+   *   people.select( people.col("height").plus(people.col("weight")) );
+   * }}}
+   *
+   * @group expr_ops
+   * @since 1.3.0
+   */
+  def + (other: Any): Column = fn("+", this, lit(other))
+
   /**
    * Gives the column a name (alias).
    * {{{
@@ -45,15 +86,21 @@ object Column {
       case "*" =>
         builder.getUnresolvedStarBuilder
       case _ if name.endsWith(".*") =>
-        throw new UnsupportedOperationException("* with prefix is not supported yet.")
+        unsupported("* with prefix is not supported yet.")
       case _ =>
         builder.getUnresolvedAttributeBuilder.setUnparsedIdentifier(name)
     }
   }
 
-  def apply(f: proto.Expression.Builder => Unit): Column = {
+  private[client] def apply(f: proto.Expression.Builder => Unit): Column = {
     val builder = proto.Expression.newBuilder()
     f(builder)
     new Column(builder.build())
+  }
+
+  private[client] def fn(name: String, inputs: Column*): Column = Column { builder =>
+    builder.getUnresolvedFunctionBuilder
+      .setFunctionName(name)
+      .addAllArguments(inputs.map(_.expr).asJava)
   }
 }

@@ -55,7 +55,7 @@ class SparkSessionSuite
   }
 
   test("SparkSession initialisation with connection string") {
-    val ss = SparkSession(s"sc://localhost:$SERVER_PORT")
+    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
     val client = ss.client
     val response = client.analyze(proto.Plan.newBuilder().build())
     assert(response.getClientId == client.sessionId)
@@ -87,7 +87,7 @@ class SparkSessionSuite
   }
 
   test("range query") {
-    val ss = SparkSession(s"sc://localhost:$SERVER_PORT")
+    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
 
     ss.range(10).analyze
     testRange(0, 10, 1, None, "Case: range(10)")

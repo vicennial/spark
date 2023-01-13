@@ -19,6 +19,10 @@ package org.apache.spark.sql.connect.client
 
 import org.apache.spark.connect.proto
 
+/**
+ * The entry point to programming Spark with the Dataset and DataFrame API.
+ *
+ */
 class SparkSession private[client](val client: SparkConnectClient) {
 
   /**
@@ -82,8 +86,46 @@ object SparkSession {
   def apply(client: SparkConnectClient): SparkSession =
     new SparkSession(client)
 
-  def apply(connectionString: String): SparkSession = {
-    val client = SparkConnectClient.builder().connectionString(connectionString).build()
-    new SparkSession(client)
+  def builder(): Builder = new Builder()
+
+  /** Helper class to create a [[SparkSession]] instance */
+  class Builder() {
+    private var userId: String = _
+    private var host: String = _
+    private var port: Int = _
+    private var connectionString: Option[String] = None
+
+    def userId(id: String): Builder = {
+      userId = id
+      this
+    }
+
+    def host(inputHost: String): Builder = {
+      require(inputHost != null)
+      host = inputHost
+      this
+    }
+
+    def port(inputPort: Int): Builder = {
+      port = inputPort
+      this
+    }
+
+    def connectionString(inputString: String): Builder = {
+      require(inputString != null)
+      connectionString = Some(inputString)
+      this
+    }
+
+    def build(): SparkSession = {
+      val client = if (connectionString.isDefined) {
+        val builder = SparkConnectClient.builder().connectionString(connectionString.get)
+        if (userId != null) builder.userId(userId)
+        builder.build()
+      } else {
+        SparkConnectClient.builder().userId(userId).host(host).port(port).build()
+      }
+      new SparkSession(client)
+    }
   }
 }

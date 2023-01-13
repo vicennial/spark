@@ -55,7 +55,7 @@ class DatasetSuite
   }
 
   test("limit") {
-    val ss = SparkSession(s"sc://localhost:$SERVER_PORT")
+    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
     val df = ss.newDataset(_ => Unit)
     val builder = proto.Relation.newBuilder()
     builder.getLimitBuilder.setInput(df.plan.getRoot).setLimit(10)
