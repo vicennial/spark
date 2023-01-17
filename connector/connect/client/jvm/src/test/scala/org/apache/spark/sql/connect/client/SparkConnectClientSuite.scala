@@ -154,7 +154,7 @@ class DummySparkConnectService() extends SparkConnectServiceGrpc.SparkConnectSer
 
   private var inputPlan: proto.Plan = _
 
-  private[client] def getAndClearLatestInputPlan(): proto.Plan = {
+  private[sql] def getAndClearLatestInputPlan(): proto.Plan = {
     val plan = inputPlan
     inputPlan = null
     plan

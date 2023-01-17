@@ -57,12 +57,64 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
     builder.setSql(proto.SQL.newBuilder().setQuery(query))
   }
 
+  /**
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
+   * in a range from 0 to `end` (exclusive) with step value 1.
+   *
+   * @since 3.4.0
+   */
+  def range(end: Long): Dataset = range(0, end)
+
+  /**
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
+   * in a range from `start` to `end` (exclusive) with step value 1.
+   *
+   * @since 3.4.0
+   */
+  def range(start: Long, end: Long): Dataset = {
+    range(start, end, step = 1)
+  }
+
+  /**
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
+   * in a range from `start` to `end` (exclusive) with a step value.
+   *
+   * @since 3.4.0
+   */
+  def range(start: Long, end: Long, step: Long): Dataset = {
+    range(start, end, step, None)
+  }
+
+  /**
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
+   * in a range from `start` to `end` (exclusive) with a step value, with partition number
+   * specified.
+   *
+   * @since 3.4.0
+   */
+  def range(start: Long, end: Long, step: Long, numPartitions: Int): Dataset = {
+    range(start, end, step, Option(numPartitions))
+  }
+
+  private def range(start: Long, end: Long, step: Long, numPartitions: Option[Int]): Dataset = {
+    newDataset { builder =>
+      val rangeBuilder = builder.getRangeBuilder
+        .setStart(start)
+        .setEnd(end)
+        .setStep(step)
+      numPartitions.foreach(rangeBuilder.setNumPartitions)
+    }
+  }
+
   private[sql] def newDataset(f: proto.Relation.Builder => Unit): Dataset = {
     val builder = proto.Relation.newBuilder()
     f(builder)
     val plan = proto.Plan.newBuilder().setRoot(builder).build()
     new Dataset(this, plan)
   }
+
+  private[sql] def analyze(plan: proto.Plan): proto.AnalyzePlanResponse =
+    client.analyze(plan)
 
   private[sql] def execute(plan: proto.Plan): ClientSparkResult = {
     val value = client.execute(plan)
@@ -77,8 +129,6 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
   }
 }
 
-// The minimal builder needed to create a spark session.
-// TODO: implements all methods mentioned in the scaladoc of [[SparkSession]]
 object SparkSession {
   def builder(): Builder = new Builder()
 
@@ -88,16 +138,51 @@ object SparkSession {
     cleaner
   }
 
-  class Builder() {
-    private var _client = SparkConnectClient.builder().build()
+  def apply(client: SparkConnectClient): SparkSession =
+    new SparkSession(client, cleaner)
 
-    def client(client: SparkConnectClient): Builder = {
-      _client = client
+  /** Helper class to create a [[SparkSession]] instance */
+  class Builder() {
+    private var userId: String = _
+    private var host: String = _
+    private var port: Int = -1
+    private var connectionString: Option[String] = None
+
+    def userId(id: String): Builder = {
+      userId = id
+      this
+    }
+
+    def host(inputHost: String): Builder = {
+      require(inputHost != null)
+      host = inputHost
+      this
+    }
+
+    def port(inputPort: Int): Builder = {
+      port = inputPort
+      this
+    }
+
+    def connectionString(inputString: String): Builder = {
+      require(inputString != null)
+      connectionString = Some(inputString)
       this
     }
 
     def build(): SparkSession = {
-      new SparkSession(_client, cleaner)
+      val client = if (connectionString.isDefined) {
+        val builder = SparkConnectClient.builder().connectionString(connectionString.get)
+        if (userId != null) builder.userId(userId)
+        builder.build()
+      } else {
+        val builder = SparkConnectClient.builder()
+        if (host != null) builder.host(host)
+        if (port != -1) builder.port(port)
+        if (userId != null) builder.userId(userId)
+        builder.build()
+      }
+      new SparkSession(client, cleaner)
     }
   }
 }

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.connect.client
+package org.apache.spark.sql
 
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.LocalDate
@@ -22,6 +22,7 @@ import java.time.LocalDate
 import com.google.protobuf.ByteString
 
 import org.apache.spark.connect.proto
+import org.apache.spark.sql.connect.client.unsupported
 
 /**
  * Commonly used functions available for DataFrame operations.

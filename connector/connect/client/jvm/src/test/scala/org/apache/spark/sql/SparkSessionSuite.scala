@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.connect.client
+package org.apache.spark.sql
 
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
@@ -23,6 +23,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funsuite.AnyFunSuite  // scalastyle:ignore funsuite
 
 import org.apache.spark.connect.proto
+import org.apache.spark.sql.connect.client.DummySparkConnectService
 
 class SparkSessionSuite
   extends AnyFunSuite // scalastyle:ignore funsuite
@@ -56,9 +57,9 @@ class SparkSessionSuite
 
   test("SparkSession initialisation with connection string") {
     val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
-    val client = ss.client
-    val response = client.analyze(proto.Plan.newBuilder().build())
-    assert(response.getClientId == client.sessionId)
+    val plan = proto.Plan.newBuilder().build()
+    val response = ss.analyze(plan)
+    assert(plan.equals(service.getAndClearLatestInputPlan()))
   }
 
   private def rangePlanCreator(

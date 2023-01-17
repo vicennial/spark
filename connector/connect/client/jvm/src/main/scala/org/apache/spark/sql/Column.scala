@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.connect.client
+package org.apache.spark.sql
 
 import scala.collection.JavaConverters._
 
 import org.apache.spark.connect.proto
-import org.apache.spark.sql.connect.client.Column.fn
-import org.apache.spark.sql.connect.client.functions.lit
+import org.apache.spark.sql.Column.fn
+import org.apache.spark.sql.connect.client.unsupported
+import org.apache.spark.sql.functions.lit
 
 /**
  * A column that will be computed based on the data in a `DataFrame`.
@@ -43,7 +44,7 @@ import org.apache.spark.sql.connect.client.functions.lit
  *
  * @since 3.4.0
  */
-class Column private[client](private[client] val expr: proto.Expression) {
+class Column private[sql](private[sql] val expr: proto.Expression) {
 
   /**
    * Sum of this expression and another expression.
@@ -92,13 +93,13 @@ object Column {
     }
   }
 
-  private[client] def apply(f: proto.Expression.Builder => Unit): Column = {
+  private[sql] def apply(f: proto.Expression.Builder => Unit): Column = {
     val builder = proto.Expression.newBuilder()
     f(builder)
     new Column(builder.build())
   }
 
-  private[client] def fn(name: String, inputs: Column*): Column = Column { builder =>
+  private[sql] def fn(name: String, inputs: Column*): Column = Column { builder =>
     builder.getUnresolvedFunctionBuilder
       .setFunctionName(name)
       .addAllArguments(inputs.map(_.expr).asJava)

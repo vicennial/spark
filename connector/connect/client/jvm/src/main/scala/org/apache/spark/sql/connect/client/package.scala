@@ -18,11 +18,11 @@ package org.apache.spark.sql.connect
 
 package object client {
 
-  private[client] def unsupported(): Nothing = {
+  private[sql] def unsupported(): Nothing = {
     throw new UnsupportedOperationException
   }
 
-  private[client] def unsupported(message: String): Nothing = {
+  private[sql] def unsupported(message: String): Nothing = {
     throw new UnsupportedOperationException(message)
   }
 }
