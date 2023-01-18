@@ -19,7 +19,7 @@ package org.apache.spark.sql
 import scala.collection.JavaConverters._
 
 import org.apache.spark.connect.proto
-import org.apache.spark.sql.connect.client.ClientSparkResult
+import org.apache.spark.sql.connect.client.SparkResult
 
 class Dataset(val session: SparkSession, private[sql] val plan: proto.Plan) {
 
@@ -70,5 +70,5 @@ class Dataset(val session: SparkSession, private[sql] val plan: proto.Plan) {
 
   private[sql] def analyze: proto.AnalyzePlanResponse = session.analyze(plan)
 
-  def collectResult(): ClientSparkResult = session.execute(plan)
+  def collectResult(): SparkResult = session.execute(plan)
 }
