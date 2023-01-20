@@ -57,7 +57,7 @@ class Column private[sql] (private[sql] val expr: proto.Expression) {
    * }}}
    *
    * @group expr_ops
-   * @since 1.3.0
+   * @since 3.4.0
    */
   def +(other: Any): Column = fn("+", this, lit(other))
 
