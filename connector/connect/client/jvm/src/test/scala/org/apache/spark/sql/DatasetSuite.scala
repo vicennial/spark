@@ -23,7 +23,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funsuite.AnyFunSuite // scalastyle:ignore funsuite
 
 import org.apache.spark.connect.proto
-import org.apache.spark.sql.connect.client.DummySparkConnectService
+import org.apache.spark.sql.connect.client.{DummySparkConnectService, SparkConnectClient}
 
 class DatasetSuite
     extends AnyFunSuite // scalastyle:ignore funsuite
@@ -56,7 +56,14 @@ class DatasetSuite
   }
 
   test("limit") {
-    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
+    val ss = SparkSession
+      .builder()
+      .client(
+        SparkConnectClient
+          .builder()
+          .connectionString(s"sc://localhost:$SERVER_PORT")
+          .build())
+      .build()
     val df = ss.newDataset(_ => Unit)
     val builder = proto.Relation.newBuilder()
     builder.getLimitBuilder.setInput(df.plan.getRoot).setLimit(10)

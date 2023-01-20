@@ -128,6 +128,8 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
   }
 }
 
+// The minimal builder needed to create a spark session.
+// TODO: implements all methods mentioned in the scaladoc of [[SparkSession]]
 object SparkSession {
   def builder(): Builder = new Builder()
 
@@ -137,51 +139,16 @@ object SparkSession {
     cleaner
   }
 
-  def apply(client: SparkConnectClient): SparkSession =
-    new SparkSession(client, cleaner)
-
-  /** Helper class to create a [[SparkSession]] instance */
   class Builder() {
-    private var userId: String = _
-    private var host: String = _
-    private var port: Int = -1
-    private var connectionString: Option[String] = None
+    private var _client = SparkConnectClient.builder().build()
 
-    def userId(id: String): Builder = {
-      userId = id
-      this
-    }
-
-    def host(inputHost: String): Builder = {
-      require(inputHost != null)
-      host = inputHost
-      this
-    }
-
-    def port(inputPort: Int): Builder = {
-      port = inputPort
-      this
-    }
-
-    def connectionString(inputString: String): Builder = {
-      require(inputString != null)
-      connectionString = Some(inputString)
+    def client(client: SparkConnectClient): Builder = {
+      _client = client
       this
     }
 
     def build(): SparkSession = {
-      val client = if (connectionString.isDefined) {
-        val builder = SparkConnectClient.builder().connectionString(connectionString.get)
-        if (userId != null) builder.userId(userId)
-        builder.build()
-      } else {
-        val builder = SparkConnectClient.builder()
-        if (host != null) builder.host(host)
-        if (port != -1) builder.port(port)
-        if (userId != null) builder.userId(userId)
-        builder.build()
-      }
-      new SparkSession(client, cleaner)
+      new SparkSession(_client, cleaner)
     }
   }
 }

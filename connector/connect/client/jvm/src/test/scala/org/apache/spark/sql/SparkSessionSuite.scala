@@ -23,7 +23,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funsuite.AnyFunSuite // scalastyle:ignore funsuite
 
 import org.apache.spark.connect.proto
-import org.apache.spark.sql.connect.client.DummySparkConnectService
+import org.apache.spark.sql.connect.client.{DummySparkConnectService, SparkConnectClient}
 
 class SparkSessionSuite
     extends AnyFunSuite // scalastyle:ignore funsuite
@@ -56,9 +56,16 @@ class SparkSessionSuite
   }
 
   test("SparkSession initialisation with connection string") {
-    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
+    val ss = SparkSession
+      .builder()
+      .client(
+        SparkConnectClient
+          .builder()
+          .connectionString(s"sc://localhost:$SERVER_PORT")
+          .build())
+      .build()
     val plan = proto.Plan.newBuilder().build()
-    val response = ss.analyze(plan)
+    ss.analyze(plan)
     assert(plan.equals(service.getAndClearLatestInputPlan()))
   }
 
@@ -88,7 +95,14 @@ class SparkSessionSuite
   }
 
   test("range query") {
-    val ss = SparkSession.builder().connectionString(s"sc://localhost:$SERVER_PORT").build()
+    val ss = SparkSession
+      .builder()
+      .client(
+        SparkConnectClient
+          .builder()
+          .connectionString(s"sc://localhost:$SERVER_PORT")
+          .build())
+      .build()
 
     ss.range(10).analyze
     testRange(0, 10, 1, None, "Case: range(10)")
