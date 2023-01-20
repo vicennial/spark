@@ -20,14 +20,14 @@ import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
 import java.util.concurrent.TimeUnit
 import org.scalatest.BeforeAndAfterEach
-import org.scalatest.funsuite.AnyFunSuite  // scalastyle:ignore funsuite
+import org.scalatest.funsuite.AnyFunSuite // scalastyle:ignore funsuite
 
 import org.apache.spark.connect.proto
 import org.apache.spark.sql.connect.client.DummySparkConnectService
 
 class SparkSessionSuite
-  extends AnyFunSuite // scalastyle:ignore funsuite
-  with BeforeAndAfterEach {
+    extends AnyFunSuite // scalastyle:ignore funsuite
+    with BeforeAndAfterEach {
 
   private var server: Server = _
   private var service: DummySparkConnectService = _

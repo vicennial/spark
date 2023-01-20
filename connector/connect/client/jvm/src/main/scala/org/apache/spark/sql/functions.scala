@@ -33,29 +33,27 @@ import org.apache.spark.sql.connect.client.unsupported
 object functions {
 // scalastyle:on
 
-  private def createLiteral(
-      f: proto.Expression.Literal.Builder => Unit): Column = Column { builder =>
-    val literalBuilder = proto.Expression.Literal.newBuilder()
-    f(literalBuilder)
-    builder.setLiteral(literalBuilder)
+  private def createLiteral(f: proto.Expression.Literal.Builder => Unit): Column = Column {
+    builder =>
+      val literalBuilder = proto.Expression.Literal.newBuilder()
+      f(literalBuilder)
+      builder.setLiteral(literalBuilder)
   }
 
-  private def createDecimalLiteral(
-      precision: Int,
-      scale: Int,
-      value: String): Column = createLiteral { builder =>
-    builder.getDecimalBuilder
-      .setPrecision(precision)
-      .setScale(scale)
-      .setValue(value)
-  }
+  private def createDecimalLiteral(precision: Int, scale: Int, value: String): Column =
+    createLiteral { builder =>
+      builder.getDecimalBuilder
+        .setPrecision(precision)
+        .setScale(scale)
+        .setValue(value)
+    }
 
   /**
    * Creates a [[Column]] of literal value.
    *
-   * The passed in object is returned directly if it is already a [[Column]].
-   * If the object is a Scala Symbol, it is converted into a [[Column]] also.
-   * Otherwise, a new [[Column]] is created to represent the literal value.
+   * The passed in object is returned directly if it is already a [[Column]]. If the object is a
+   * Scala Symbol, it is converted into a [[Column]] also. Otherwise, a new [[Column]] is created
+   * to represent the literal value.
    *
    * @since 3.4.0
    */

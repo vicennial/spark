@@ -71,7 +71,8 @@ class SparkConnectClient(
    *   A [[proto.AnalyzePlanResponse]] from the Spark Connect server.
    */
   def analyze(plan: proto.Plan): proto.AnalyzePlanResponse = {
-    val request = proto.AnalyzePlanRequest.newBuilder()
+    val request = proto.AnalyzePlanRequest
+      .newBuilder()
       .setPlan(plan)
       .setUserContext(userContext)
       .setClientId(sessionId)
@@ -115,7 +116,7 @@ object SparkConnectClient {
       this
     }
 
-    object URIParams {
+    private object URIParams {
       val PARAM_USER_ID = "user_id"
       val PARAM_USE_SSL = "use_ssl"
       val PARAM_TOKEN = "token"

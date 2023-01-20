@@ -44,7 +44,7 @@ import org.apache.spark.sql.functions.lit
  *
  * @since 3.4.0
  */
-class Column private[sql](private[sql] val expr: proto.Expression) {
+class Column private[sql] (private[sql] val expr: proto.Expression) {
 
   /**
    * Sum of this expression and another expression.
@@ -59,7 +59,7 @@ class Column private[sql](private[sql] val expr: proto.Expression) {
    * @group expr_ops
    * @since 1.3.0
    */
-  def + (other: Any): Column = fn("+", this, lit(other))
+  def +(other: Any): Column = fn("+", this, lit(other))
 
   /**
    * Gives the column a name (alias).
@@ -68,9 +68,9 @@ class Column private[sql](private[sql] val expr: proto.Expression) {
    *   df.select($"colA".name("colB"))
    * }}}
    *
-   * If the current column has metadata associated with it, this metadata will be propagated
-   * to the new column. If this not desired, use the API `as(alias: String, metadata: Metadata)`
-   * with explicit metadata.
+   * If the current column has metadata associated with it, this metadata will be propagated to
+   * the new column. If this not desired, use the API `as(alias: String, metadata: Metadata)` with
+   * explicit metadata.
    *
    * @group expr_ops
    * @since 3.4.0

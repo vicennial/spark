@@ -18,10 +18,13 @@ package org.apache.spark.sql.connect.client.util
 
 import java.io.{BufferedOutputStream, File}
 
+import scala.io.Source
+
 import org.scalatest.BeforeAndAfterAll
 import sys.process._
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.connect.client.SparkConnectClient
 import org.apache.spark.sql.connect.common.config.ConnectCommon
 
 /**
@@ -40,7 +43,7 @@ import org.apache.spark.sql.connect.common.config.ConnectCommon
  * console to debug server start stop problems.
  */
 object SparkConnectServerUtils {
-  // Env variables used for testing and debugging
+  // System properties used for testing and debugging
   private val SPARK_HOME = "SPARK_HOME"
   private val ENV_DEBUG_SC_JVM_CLIENT = "DEBUG_SC_JVM_CLIENT"
 
@@ -54,7 +57,7 @@ object SparkConnectServerUtils {
   private[connect] def debug(error: Throwable): Unit = if (isDebug) error.printStackTrace()
 
   // Server port
-  private[connect] val port = ConnectCommon.CONNECT_GRPC_BINDING_PORT
+  private[connect] val port = ConnectCommon.CONNECT_GRPC_BINDING_PORT + util.Random.nextInt(1000)
 
   @volatile private var stopped = false
 
@@ -69,13 +72,16 @@ object SparkConnectServerUtils {
         "--driver-class-path",
         jar,
         "--conf",
-        "spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin"))
+        "spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin",
+        "--conf",
+        s"spark.connect.grpc.binding.port=$port"))
 
     val io = new ProcessIO(
-      // hold the input channel to the spark console to keep the console open
+      // Hold the input channel to the spark console to keep the console open
       in => new BufferedOutputStream(in),
-      out => scala.io.Source.fromInputStream(out).getLines.foreach(debug),
-      err => scala.io.Source.fromInputStream(err).getLines.foreach(debug))
+      // Only redirect output if debug to avoid channel interruption error on process termination.
+      out => if (isDebug) Source.fromInputStream(out).getLines.foreach(debug),
+      err => if (isDebug) Source.fromInputStream(err).getLines.foreach(debug))
     val process = builder.run(io)
 
     // Adding JVM shutdown hook
@@ -112,12 +118,13 @@ object SparkConnectServerUtils {
     val parentDir = new File(sparkHome, target)
     assert(
       parentDir.exists(),
-      s"Fail to locate the spark connect target folder: '${parentDir.getCanonicalPath}'. " +
+      s"Fail to locate the spark connect server target folder: '${parentDir.getCanonicalPath}'. " +
         s"SPARK_HOME='${new File(sparkHome).getCanonicalPath}'. " +
-        "Make sure env variable `SPARK_HOME` is set correctly.")
+        "Make sure the spark connect server jar has been built " +
+        "and the system property `SPARK_HOME` is set correctly.")
     val jars = recursiveListFiles(parentDir).filter { f =>
       // SBT jar
-      (f.getParent.endsWith("scala-2.12") &&
+      (f.getParentFile.getName.startsWith("scala-") &&
         f.getName.startsWith("spark-connect-assembly") && f.getName.endsWith("SNAPSHOT.jar")) ||
       // Maven Jar
       (f.getParent.endsWith("target") &&
@@ -146,7 +153,7 @@ trait RemoteSparkSession
   override def beforeAll(): Unit = {
     super.beforeAll()
     SparkConnectServerUtils.start()
-    spark = SparkSession.builder().build()
+    spark = SparkSession.builder().client(SparkConnectClient.builder().port(port).build()).build()
 
     // Retry and wait for the server to start
     val stop = System.currentTimeMillis() + 60000 * 1 // ~1 min
@@ -182,7 +189,7 @@ trait RemoteSparkSession
 
   override def afterAll(): Unit = {
     try {
-      spark.close()
+      if (spark != null) spark.close()
     } catch {
       case e: Throwable => debug(e)
     }

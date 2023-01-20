@@ -58,16 +58,16 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
   }
 
   /**
-   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
-   * in a range from 0 to `end` (exclusive) with step value 1.
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements in a
+   * range from 0 to `end` (exclusive) with step value 1.
    *
    * @since 3.4.0
    */
   def range(end: Long): Dataset = range(0, end)
 
   /**
-   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
-   * in a range from `start` to `end` (exclusive) with step value 1.
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements in a
+   * range from `start` to `end` (exclusive) with step value 1.
    *
    * @since 3.4.0
    */
@@ -76,8 +76,8 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
   }
 
   /**
-   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
-   * in a range from `start` to `end` (exclusive) with a step value.
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements in a
+   * range from `start` to `end` (exclusive) with a step value.
    *
    * @since 3.4.0
    */
@@ -86,9 +86,8 @@ class SparkSession(private val client: SparkConnectClient, private val cleaner: 
   }
 
   /**
-   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
-   * in a range from `start` to `end` (exclusive) with a step value, with partition number
-   * specified.
+   * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements in a
+   * range from `start` to `end` (exclusive) with a step value, with partition number specified.
    *
    * @since 3.4.0
    */

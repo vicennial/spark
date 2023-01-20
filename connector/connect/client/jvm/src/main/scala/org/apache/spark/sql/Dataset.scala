@@ -55,9 +55,9 @@ class Dataset(val session: SparkSession, private[sql] val plan: proto.Plan) {
   }
 
   /**
-   * Returns a new Dataset by taking the first `n` rows. The difference between this function
-   * and `head` is that `head` is an action and returns an array (by triggering query execution)
-   * while `limit` returns a new Dataset.
+   * Returns a new Dataset by taking the first `n` rows. The difference between this function and
+   * `head` is that `head` is an action and returns an array (by triggering query execution) while
+   * `limit` returns a new Dataset.
    *
    * @group typedrel
    * @since 3.4.0

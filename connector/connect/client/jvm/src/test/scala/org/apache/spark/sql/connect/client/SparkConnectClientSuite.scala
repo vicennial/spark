@@ -79,7 +79,7 @@ class SparkConnectClientSuite
   }
 
   test("Test connection") {
-    val testPort = 16000
+    val testPort = 16001
     client = SparkConnectClient.builder().port(testPort).build()
     testClientConnection(client, testPort)
   }

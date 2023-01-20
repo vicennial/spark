@@ -26,8 +26,8 @@ import org.apache.spark.connect.proto
 import org.apache.spark.sql.connect.client.DummySparkConnectService
 
 class DatasetSuite
-  extends AnyFunSuite // scalastyle:ignore funsuite
-  with BeforeAndAfterEach {
+    extends AnyFunSuite // scalastyle:ignore funsuite
+    with BeforeAndAfterEach {
 
   private var server: Server = _
   private var service: DummySparkConnectService = _
