@@ -64,7 +64,7 @@ class DatasetSuite
           .connectionString(s"sc://localhost:$SERVER_PORT")
           .build())
       .build()
-    val df = ss.newDataset(_ => Unit)
+    val df = ss.newDataset(_ => ())
     val builder = proto.Relation.newBuilder()
     builder.getLimitBuilder.setInput(df.plan.getRoot).setLimit(10)
 
