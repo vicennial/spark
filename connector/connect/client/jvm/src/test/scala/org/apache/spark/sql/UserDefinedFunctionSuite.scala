@@ -38,11 +38,11 @@ class UserDefinedFunctionSuite
     val myUdf = udf(func _)
     val colWithUdf = myUdf(Column("dummy"))
 
-    val udfExpr = colWithUdf.expr.getScalarInlineUserDefinedFunction
+    val udfExpr = colWithUdf.expr.getCommonInlineUserDefinedFunction
     assert(udfExpr.getDeterministic)
     assert(udfExpr.getArgumentsCount == 1)
     assert(udfExpr.getArguments(0) == Column("dummy").expr)
-    val udfObj = udfExpr.getScalaUdf
+    val udfObj = udfExpr.getScalarScalaUdf
 
     assert(udfObj.getNullable)
 

@@ -109,10 +109,10 @@ case class ScalarUserDefinedFunction(
 
   @scala.annotation.varargs
   override def apply(exprs: Column*): Column = Column { builder =>
-    val udfBuilder = builder.getScalarInlineUserDefinedFunctionBuilder
+    val udfBuilder = builder.getCommonInlineUserDefinedFunctionBuilder
     udfBuilder
       .setDeterministic(deterministic)
-      .setScalaUdf(udf)
+      .setScalarScalaUdf(udf)
       .addAllArguments(exprs.map(_.expr).asJava)
 
     name.foreach(udfBuilder.setFunctionName)

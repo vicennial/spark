@@ -833,16 +833,16 @@ class SparkConnectPlanner(val session: SparkSession) {
     fun.getFunctionCase match {
       case proto.CommonInlineUserDefinedFunction.FunctionCase.PYTHON_UDF =>
         transformPythonUDF(fun)
-      case proto.ScalarInlineUserDefinedFunction.FunctionCase.SCALA_UDF =>
-        transformScalaUDF(fun)
+      case proto.CommonInlineUserDefinedFunction.FunctionCase.SCALAR_SCALA_UDF =>
+        transformScalarScalaUDF(fun)
       case _ =>
         throw InvalidPlanInput(
           s"Function with ID: ${fun.getFunctionCase.getNumber} is not supported")
     }
   }
 
-  private def transformScalaUDF(fun: proto.ScalarInlineUserDefinedFunction): Expression = {
-    val udf = fun.getScalaUdf
+  private def transformScalarScalaUDF(fun: proto.CommonInlineUserDefinedFunction): Expression = {
+    val udf = fun.getScalarScalaUdf
     val udfPacket = Utils.deserialize[UdfPacket](
       udf.getPayload.toByteArray,
       Utils.getContextOrSparkClassLoader)

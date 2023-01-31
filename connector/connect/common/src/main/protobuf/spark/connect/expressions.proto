@@ -307,7 +307,7 @@ message CommonInlineUserDefinedFunction {
   // (Required) Indicate the function type of the user-defined function.
   oneof function {
     PythonUDF python_udf = 4;
-    ScalarScalaUDF scala_udf = 5;
+    ScalarScalaUDF scalar_scala_udf = 5;
   }
 }
 
