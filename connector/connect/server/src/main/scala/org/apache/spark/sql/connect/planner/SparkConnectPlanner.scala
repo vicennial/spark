@@ -29,6 +29,7 @@ import org.apache.spark.connect.proto
 import org.apache.spark.sql.{Column, Dataset, Encoders, SparkSession}
 import org.apache.spark.sql.catalyst.{expressions, AliasIdentifier, FunctionIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, MultiAlias, UnresolvedAlias, UnresolvedAttribute, UnresolvedExtractValue, UnresolvedFunction, UnresolvedRegex, UnresolvedRelation, UnresolvedStar}
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.optimizer.CombineUnions
 import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, ParseException, ParserUtils}
@@ -36,6 +37,7 @@ import org.apache.spark.sql.catalyst.plans.{Cross, FullOuter, Inner, JoinType, L
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.{Deduplicate, Except, Intersect, LocalRelation, LogicalPlan, Sample, Sort, SubqueryAlias, Union, Unpivot, UnresolvedHint}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, CharVarcharUtils}
+import org.apache.spark.sql.connect.common.UdfPacket
 import org.apache.spark.sql.connect.planner.LiteralValueProtoConverter.{toCatalystExpression, toCatalystValue}
 import org.apache.spark.sql.connect.plugin.SparkConnectPluginRegistry
 import org.apache.spark.sql.errors.QueryCompilationErrors
@@ -831,10 +833,28 @@ class SparkConnectPlanner(val session: SparkSession) {
     fun.getFunctionCase match {
       case proto.ScalarInlineUserDefinedFunction.FunctionCase.PYTHON_UDF =>
         transformPythonUDF(fun)
+      case proto.ScalarInlineUserDefinedFunction.FunctionCase.SCALA_UDF =>
+        transformScalaUDF(fun)
       case _ =>
         throw InvalidPlanInput(
           s"Function with ID: ${fun.getFunctionCase.getNumber} is not supported")
     }
+  }
+
+  private def transformScalaUDF(fun: proto.ScalarInlineUserDefinedFunction): Expression = {
+    val udf = fun.getScalaUdf
+    val udfPacket = Utils.deserialize[UdfPacket](
+      udf.getPayload.toByteArray,
+      Utils.getContextOrSparkClassLoader)
+    ScalaUDF(
+      function = udfPacket.function,
+      dataType = udfPacket.outputEncoder.dataType,
+      children = fun.getArgumentsList.asScala.map(transformExpression),
+      inputEncoders = udfPacket.inputEncoders.map(e => Option(ExpressionEncoder(e))),
+      outputEncoder = Option(ExpressionEncoder(udfPacket.outputEncoder)),
+      udfName = Option(fun.getFunctionName),
+      nullable = udf.getNullable,
+      udfDeterministic = fun.getDeterministic)
   }
 
   /**

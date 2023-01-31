@@ -19,10 +19,13 @@ package org.apache.spark.sql
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.LocalDate
 
+import scala.reflect.runtime.universe.{typeTag, TypeTag}
+
 import com.google.protobuf.ByteString
 
 import org.apache.spark.connect.proto
 import org.apache.spark.sql.connect.client.unsupported
+import org.apache.spark.sql.expressions.{ScalarUserDefinedFunction, UserDefinedFunction}
 
 /**
  * Commonly used functions available for DataFrame operations.
@@ -79,5 +82,22 @@ object functions {
       case null => unsupported("Null literals not supported yet.")
       case _ => unsupported(s"literal $literal not supported (yet).")
     }
+  }
+
+  def udf[RT: TypeTag](f: () => RT): UserDefinedFunction = {
+    ScalarUserDefinedFunction(f, typeTag[RT])
+  }
+
+  def udf[RT: TypeTag, A1: TypeTag](f: A1 => RT): UserDefinedFunction = {
+    ScalarUserDefinedFunction(f, typeTag[RT], typeTag[A1])
+  }
+
+  def udf[RT: TypeTag, A1: TypeTag, A2: TypeTag](f: (A1, A2) => RT): UserDefinedFunction = {
+    ScalarUserDefinedFunction(f, typeTag[RT], typeTag[A1], typeTag[A2])
+  }
+
+  def udf[RT: TypeTag, A1: TypeTag, A2: TypeTag, A3: TypeTag](
+      f: (A1, A2, A3) => RT): UserDefinedFunction = {
+    ScalarUserDefinedFunction(f, typeTag[RT], typeTag[A1], typeTag[A2], typeTag[A3])
   }
 }
