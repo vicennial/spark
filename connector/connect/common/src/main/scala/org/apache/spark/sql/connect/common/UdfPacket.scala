@@ -21,10 +21,21 @@ import java.io.{InputStream, ObjectInputStream, ObjectOutputStream, OutputStream
 
 import org.apache.spark.sql.catalyst.encoders.AgnosticEncoder
 
+/**
+ * A wrapper class around the UDF and it's Input/Output [[AgnosticEncoder]](s).
+ *
+ * This class is shared between the client and the server to allow for serialization and
+ * deserialization of the JVM object.
+ *
+ * @param function The UDF
+ * @param inputEncoders A list of [[AgnosticEncoder]](s) for all input arguments of the UDF
+ * @param outputEncoder An [[AgnosticEncoder]] for the output of the UDF
+ */
 case class UdfPacket(
-  function: AnyRef,
-  inputEncoders: Seq[AgnosticEncoder[_]],
-  outputEncoder: AgnosticEncoder[_]) {
+    function: AnyRef,
+    inputEncoders: Seq[AgnosticEncoder[_]],
+    outputEncoder: AgnosticEncoder[_]) {
+
   def writeTo(out: OutputStream): Unit = {
     val oos = new ObjectOutputStream(out)
     oos.writeObject(this)
