@@ -89,13 +89,16 @@ sealed abstract class UserDefinedFunction {
   def asNondeterministic(): UserDefinedFunction
 }
 
+/**
+ * Holder class for a scalar user-defined function and it's input/output encoder(s).
+ */
 case class ScalarUserDefinedFunction(
-  function: AnyRef,
-  inputEncoders: Seq[AgnosticEncoder[_]],
-  outputEncoder: AgnosticEncoder[_],
-  name: Option[String],
-  override val nullable: Boolean,
-  override val deterministic: Boolean) extends UserDefinedFunction {
+    function: AnyRef,
+    inputEncoders: Seq[AgnosticEncoder[_]],
+    outputEncoder: AgnosticEncoder[_],
+    name: Option[String],
+    override val nullable: Boolean,
+    override val deterministic: Boolean) extends UserDefinedFunction {
 
   private[this] lazy val udf = {
     val udfPacketBytes = Utils.serialize(UdfPacket(function, inputEncoders, outputEncoder))
@@ -130,6 +133,7 @@ object ScalarUserDefinedFunction {
       function: AnyRef,
       returnType: TypeTag[_],
       parameterTypes: TypeTag[_]*): ScalarUserDefinedFunction = {
+
     ScalarUserDefinedFunction(
       function = function,
       inputEncoders = parameterTypes.map(tag => ScalaReflection.encoderFor(tag)),

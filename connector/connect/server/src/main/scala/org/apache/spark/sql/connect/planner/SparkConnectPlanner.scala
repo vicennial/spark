@@ -841,7 +841,15 @@ class SparkConnectPlanner(val session: SparkSession) {
     }
   }
 
-  private def transformScalarScalaUDF(fun: proto.CommonInlineUserDefinedFunction): Expression = {
+  /**
+   * Translates a Scalar Scala user-defined function from proto to the Catalyst expression.
+   *
+   * @param fun
+   *   Proto representation of the Scalar Scalar user-defined function.
+   * @return
+   *   ScalaUDF.
+   */
+  private def transformScalarScalaUDF(fun: proto.CommonInlineUserDefinedFunction): ScalaUDF = {
     val udf = fun.getScalarScalaUdf
     val udfPacket = Utils.deserialize[UdfPacket](
       udf.getPayload.toByteArray,
