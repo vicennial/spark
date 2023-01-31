@@ -857,7 +857,7 @@ class SparkConnectPlanner(val session: SparkSession) {
     ScalaUDF(
       function = udfPacket.function,
       dataType = udfPacket.outputEncoder.dataType,
-      children = fun.getArgumentsList.asScala.map(transformExpression),
+      children = fun.getArgumentsList.asScala.map(transformExpression).toSeq,
       inputEncoders = udfPacket.inputEncoders.map(e => Option(ExpressionEncoder(e))),
       outputEncoder = Option(ExpressionEncoder(udfPacket.outputEncoder)),
       udfName = Option(fun.getFunctionName),
