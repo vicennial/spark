@@ -26,8 +26,6 @@ import org.apache.spark.sql.connect.common.UdfPacket
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.util.Utils
 
-
-
 class UserDefinedFunctionSuite
     extends AnyFunSuite // scalastyle:ignore funsuite
     with BeforeAndAfterEach {

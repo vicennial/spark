@@ -27,9 +27,12 @@ import org.apache.spark.sql.catalyst.encoders.AgnosticEncoder
  * This class is shared between the client and the server to allow for serialization and
  * deserialization of the JVM object.
  *
- * @param function The UDF
- * @param inputEncoders A list of [[AgnosticEncoder]](s) for all input arguments of the UDF
- * @param outputEncoder An [[AgnosticEncoder]] for the output of the UDF
+ * @param function
+ *   The UDF
+ * @param inputEncoders
+ *   A list of [[AgnosticEncoder]](s) for all input arguments of the UDF
+ * @param outputEncoder
+ *   An [[AgnosticEncoder]] for the output of the UDF
  */
 case class UdfPacket(
     function: AnyRef,
@@ -57,7 +60,8 @@ object UdfPacket {
 
   def apply(bytes: ByteString): UdfPacket = {
     val in = bytes.newInput()
-    try UdfPacket(in) finally {
+    try UdfPacket(in)
+    finally {
       in.close()
     }
   }

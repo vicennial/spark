@@ -52,8 +52,8 @@ sealed abstract class UserDefinedFunction {
   def nullable: Boolean
 
   /**
-   * Returns true iff the UDF is deterministic, i.e. the UDF produces the same output given the same
-   * input.
+   * Returns true iff the UDF is deterministic, i.e. the UDF produces the same output given the
+   * same input.
    *
    * @since 3.4.0
    */
@@ -98,7 +98,8 @@ case class ScalarUserDefinedFunction(
     outputEncoder: AgnosticEncoder[_],
     name: Option[String],
     override val nullable: Boolean,
-    override val deterministic: Boolean) extends UserDefinedFunction {
+    override val deterministic: Boolean)
+    extends UserDefinedFunction {
 
   private[this] lazy val udf = {
     val udfPacketBytes = Utils.serialize(UdfPacket(function, inputEncoders, outputEncoder))

@@ -851,9 +851,8 @@ class SparkConnectPlanner(val session: SparkSession) {
    */
   private def transformScalarScalaUDF(fun: proto.CommonInlineUserDefinedFunction): ScalaUDF = {
     val udf = fun.getScalarScalaUdf
-    val udfPacket = Utils.deserialize[UdfPacket](
-      udf.getPayload.toByteArray,
-      Utils.getContextOrSparkClassLoader)
+    val udfPacket =
+      Utils.deserialize[UdfPacket](udf.getPayload.toByteArray, Utils.getContextOrSparkClassLoader)
     ScalaUDF(
       function = udfPacket.function,
       dataType = udfPacket.outputEncoder.dataType,
