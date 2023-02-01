@@ -34,10 +34,12 @@ import org.apache.spark.sql.catalyst.encoders.AgnosticEncoder
  * @param outputEncoder
  *   An [[AgnosticEncoder]] for the output of the UDF
  */
+@SerialVersionUID(8866761834651399125L)
 case class UdfPacket(
     function: AnyRef,
     inputEncoders: Seq[AgnosticEncoder[_]],
-    outputEncoder: AgnosticEncoder[_]) {
+    outputEncoder: AgnosticEncoder[_])
+    extends Serializable {
 
   def writeTo(out: OutputStream): Unit = {
     val oos = new ObjectOutputStream(out)

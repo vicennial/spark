@@ -58,7 +58,7 @@ class ClientE2ETestSuite extends RemoteSparkSession {
     val result = df.collectResult()
     assert(result.length == 5)
     result.toArray.zipWithIndex.foreach { case (v, idx) =>
-      assert(v.getLong(0) == idx + 5)
+      assert(v.getInt(0) == idx + 5)
     }
   }
 
