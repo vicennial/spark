@@ -35,6 +35,8 @@ class SparkConnectClient(
 
   private[this] val stub = proto.SparkConnectServiceGrpc.newBlockingStub(channel)
 
+  private[client] val artifactManager: ArtifactManager = new ArtifactManager(userContext, channel)
+
   /**
    * Placeholder method.
    * @return
@@ -52,10 +54,13 @@ class SparkConnectClient(
    * @return
    *   A [[proto.AnalyzePlanResponse]] from the Spark Connect server.
    */
-  def analyze(request: proto.AnalyzePlanRequest): proto.AnalyzePlanResponse =
+  def analyze(request: proto.AnalyzePlanRequest): proto.AnalyzePlanResponse = {
+    artifactManager.ensureAllArtifactsUploaded()
     stub.analyzePlan(request)
+  }
 
   def execute(plan: proto.Plan): java.util.Iterator[proto.ExecutePlanResponse] = {
+    artifactManager.ensureAllArtifactsUploaded()
     val request = proto.ExecutePlanRequest
       .newBuilder()
       .setPlan(plan)
@@ -80,6 +85,20 @@ class SparkConnectClient(
       .build()
     analyze(request)
   }
+
+  /**
+   * Add a single artifact to the client session.
+   *
+   * Currently this supports local files and ivy coordinates.
+   */
+  def addArtifact(path: String): Unit = artifactManager.addArtifact(path)
+
+  /**
+   * Add a single artifact to the client session.
+   *
+   * Currently this supports local files and ivy coordinates.
+   */
+  def addArtifact(uri: URI): Unit = artifactManager.addArtifact(uri)
 
   /**
    * Shutdown the client's connection to the server.
