@@ -18,16 +18,14 @@
 package org.apache.spark.sql.connect.service
 
 import java.util.concurrent.TimeUnit
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
-
 import com.google.common.base.Ticker
 import com.google.common.cache.CacheBuilder
 import com.google.protobuf.{Any => ProtoAny}
-import com.google.rpc.{Code => RPCCode, ErrorInfo, Status => RPCStatus}
+import com.google.rpc.{ErrorInfo, Code => RPCCode, Status => RPCStatus}
 import io.grpc.{Server, Status}
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.StatusProto
@@ -36,11 +34,10 @@ import io.grpc.stub.StreamObserver
 import org.apache.commons.lang3.StringUtils
 import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods.{compact, render}
-
 import org.apache.spark.{SparkEnv, SparkException, SparkThrowable}
 import org.apache.spark.api.python.PythonException
 import org.apache.spark.connect.proto
-import org.apache.spark.connect.proto.{AnalyzePlanRequest, AnalyzePlanResponse, ExecutePlanRequest, ExecutePlanResponse, SparkConnectServiceGrpc}
+import org.apache.spark.connect.proto.{AddArtifactsRequest, AddArtifactsResponse, AnalyzePlanRequest, AnalyzePlanResponse, ExecutePlanRequest, ExecutePlanResponse, SparkConnectServiceGrpc}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.connect.common.DataTypeProtoConverter
@@ -226,6 +223,28 @@ class SparkConnectService(debug: Boolean)
     try {
       new SparkConnectConfigHandler(responseObserver).handle(request)
     } catch handleError("config", observer = responseObserver)
+  }
+
+  /**
+   * This is the main entry method for all calls to add/transfer artifacts.
+   *
+   * @param responseObserver
+   * @return
+   */
+  override def addArtifacts(responseObserver: StreamObserver[AddArtifactsResponse])
+      : StreamObserver[AddArtifactsRequest] = {
+    // TODO: Handle artifact files
+    // No-Op StreamObserver
+    new StreamObserver[AddArtifactsRequest] {
+      override def onNext(v: AddArtifactsRequest): Unit = {}
+
+      override def onError(throwable: Throwable): Unit = responseObserver.onError(throwable)
+
+      override def onCompleted(): Unit = {
+        responseObserver.onNext(proto.AddArtifactsResponse.newBuilder().build())
+        responseObserver.onCompleted()
+      }
+    }
   }
 }
 
