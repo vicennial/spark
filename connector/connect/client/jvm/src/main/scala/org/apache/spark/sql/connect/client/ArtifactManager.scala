@@ -190,6 +190,20 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     stream.onNext(builder.build())
   }
 
+  private def readNextChunk(in: InputStream): ByteString = {
+    val buf = new Array[Byte](chunkSize)
+    var bytesRead = 0
+    var count = 0
+    while (count != -1 && bytesRead < chunkSize) {
+      count = in.read(buf, bytesRead, chunkSize - bytesRead)
+      if (count != -1) {
+        bytesRead += count
+      }
+    }
+    if (bytesRead == 0) ByteString.empty()
+    else ByteString.copyFrom(buf, 0, bytesRead)
+  }
+
   /**
    * Add a artifact in chunks to the stream. The artifact's data is spread out over multiple
    * [[proto.AddArtifactsRequest requests]].
@@ -206,8 +220,8 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
       // First RPC contains the `BeginChunkedArtifact` payload (`begin_chunk`).
       // Subsequent RPCs contains the `ArtifactChunk` payload (`chunk`).
       val artifactChunkBuilder = proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
-      var dataChunk = ByteString.readFrom(in, chunkSize)
-      def getNumChunks(size: Long): Long = (size + (chunkSize - 1)) / chunkSize
+      var dataChunk = readNextChunk(in)
+      def getNumChunks(size: Long) = (size + (chunkSize - 1)) / chunkSize
       builder.getBeginChunkBuilder
         .setName(artifact.path.toString)
         .setTotalBytes(artifact.size)
@@ -217,10 +231,16 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
             .setData(dataChunk)
             .setCrc(in.getChecksum.getValue))
       stream.onNext(builder.build())
+      builder.clearBeginChunk()
 
-      while ({ dataChunk = ByteString.readFrom(in, chunkSize); !dataChunk.isEmpty }) {
+      dataChunk = readNextChunk(in)
+      while (!dataChunk.isEmpty) {
         artifactChunkBuilder.setData(dataChunk).setCrc(in.getChecksum.getValue)
+        builder.setChunk(artifactChunkBuilder.build())
         stream.onNext(builder.build())
+
+        builder.clearChunk()
+        dataChunk = readNextChunk(in)
       }
     } catch {
       case NonFatal(e) =>

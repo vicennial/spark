@@ -16,6 +16,7 @@
  */
 package org.apache.spark.sql.connect.client
 
+import java.io.InputStream
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import java.util.zip.{CheckedInputStream, CRC32}
@@ -28,7 +29,6 @@ import org.scalatest.BeforeAndAfterEach
 import org.apache.spark.connect.proto
 import org.apache.spark.connect.proto.AddArtifactsRequest
 import org.apache.spark.sql.connect.client.util.ConnectFunSuite
-
 
 class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
 
@@ -113,4 +113,45 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
   singleChunkArtifactTest("smallClassFile.class")
 
   singleChunkArtifactTest("smallJar.jar")
+
+  private def readNextChunk(in: InputStream): ByteString = {
+    val buf = new Array[Byte](chunkSize)
+    var bytesRead = 0
+    var count = 0
+    while (count != -1 && bytesRead < chunkSize) {
+      count = in.read(buf, bytesRead, chunkSize - bytesRead)
+      if (count != -1) {
+        bytesRead += count
+      }
+    }
+    if (bytesRead == 0) ByteString.empty()
+    else ByteString.copyFrom(buf, 0, bytesRead)
+  }
+
+  private def checkChunkDataAndCrc(
+      in: CheckedInputStream,
+      chunk: AddArtifactsRequest.ArtifactChunk): Boolean = {
+    val expectedData = readNextChunk(in)
+    val expectedCRC = in.getChecksum.getValue
+    chunk.getData == expectedData && chunk.getCrc == expectedCRC
+  }
+
+  test("Chunked Artifact - junitLargeJar.jar") {
+    val artifactPath = artifactFilePath.resolve("junitLargeJar.jar")
+    artifactManager.addArtifact(artifactPath.toString)
+    val in = new CheckedInputStream(Files.newInputStream(artifactPath), new CRC32)
+
+    val expectedChunks = (384581 + (chunkSize - 1)) / chunkSize
+    val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+    assert(384581 == Files.size(artifactPath))
+    assert(receivedRequests.size == expectedChunks)
+    assert(receivedRequests.head.hasBeginChunk)
+    val beginChunkRequest = receivedRequests.head.getBeginChunk
+    assert(beginChunkRequest.getName == "jars/junitLargeJar.jar")
+    assert(beginChunkRequest.getTotalBytes == 384581)
+    assert(beginChunkRequest.getNumChunks == expectedChunks)
+    checkChunkDataAndCrc(in, beginChunkRequest.getInitialChunk)
+
+    receivedRequests.drop(1).forall(r => r.hasChunk && checkChunkDataAndCrc(in, r.getChunk))
+  }
 }
