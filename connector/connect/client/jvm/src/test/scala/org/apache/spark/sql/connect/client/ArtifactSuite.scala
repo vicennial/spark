@@ -175,4 +175,41 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     assertFileDataEquality(artifacts.get(0).getData, Paths.get(file1))
     assertFileDataEquality(artifacts.get(1).getData, Paths.get(file2))
   }
+
+  test("Mix of SingleChunkArtifact and chunked artifact") {
+    val file1 = artifactFilePath.resolve("smallClassFile.class").toUri
+    val file2 = artifactFilePath.resolve("junitLargeJar.jar").toUri
+    val file3 = artifactFilePath.resolve("smallClassFileDup.class").toUri
+    val file4 = artifactFilePath.resolve("smallJar.jar").toUri
+    artifactManager.addArtifacts(file1, file2, file3, file4)
+    val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+    assert(receivedRequests.size ==  1 + 12 + 1)
+
+    val firstReqBatch = receivedRequests.head.getBatch.getArtifactsList
+    assert(firstReqBatch.size() == 1)
+    assert(firstReqBatch.get(0).getName == "classes/smallClassFile.class")
+    assertFileDataEquality(firstReqBatch.get(0).getData, Paths.get(file1))
+
+    val secondReq = receivedRequests(1)
+    assert(secondReq.hasBeginChunk)
+    val beginChunkRequest = secondReq.getBeginChunk
+    assert(beginChunkRequest.getName == "jars/junitLargeJar.jar")
+    assert(beginChunkRequest.getTotalBytes == 384581)
+    assert(beginChunkRequest.getNumChunks == 12)
+    val file2in = new CheckedInputStream(Files.newInputStream(Paths.get(file2)), new CRC32)
+    checkChunkDataAndCrc(file2in, beginChunkRequest.getInitialChunk)
+    receivedRequests
+      .drop(2)
+      .dropRight(1)
+      .forall(r => r.hasChunk && checkChunkDataAndCrc(file2in, r.getChunk))
+
+    val lastBatch = receivedRequests.last.getBatch
+    assert(lastBatch.getArtifactsCount == 2)
+    val remainingArtifacts = lastBatch.getArtifactsList
+    assert(remainingArtifacts.get(0).getName == "classes/smallClassFileDup.class")
+    assert(remainingArtifacts.get(1).getName == "jars/smallJar.jar")
+
+    assertFileDataEquality(remainingArtifacts.get(0).getData, Paths.get(file3))
+    assertFileDataEquality(remainingArtifacts.get(1).getData, Paths.get(file4))
+  }
 }
