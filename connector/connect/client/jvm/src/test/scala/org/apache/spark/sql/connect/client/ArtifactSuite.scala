@@ -17,7 +17,7 @@
 package org.apache.spark.sql.connect.client
 
 import java.io.InputStream
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.TimeUnit
 import java.util.zip.{CheckedInputStream, CRC32}
 
@@ -153,5 +153,26 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     checkChunkDataAndCrc(in, beginChunkRequest.getInitialChunk)
 
     receivedRequests.drop(1).forall(r => r.hasChunk && checkChunkDataAndCrc(in, r.getChunk))
+  }
+
+  test("Batched SingleChunkArtifacts") {
+    val file1 = artifactFilePath.resolve("smallClassFile.class").toUri
+    val file2 = artifactFilePath.resolve("smallJar.jar").toUri
+    artifactManager.addArtifacts(file1, file2)
+    val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+    assert(receivedRequests.size == 1)
+
+    val request = receivedRequests.head
+    assert(request.hasBatch)
+
+    val batch = request.getBatch
+    assert(batch.getArtifactsList.size() == 2)
+
+    val artifacts = batch.getArtifactsList
+    assert(artifacts.get(0).getName == "classes/smallClassFile.class")
+    assert(artifacts.get(1).getName == "jars/smallJar.jar")
+
+    assertFileDataEquality(artifacts.get(0).getData, Paths.get(file1))
+    assertFileDataEquality(artifacts.get(1).getData, Paths.get(file2))
   }
 }

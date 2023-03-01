@@ -60,12 +60,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     addArtifact(Utils.resolveURI(path))
   }
 
-  /**
-   * Add a single artifact to the session.
-   *
-   * Currently this supports local files and ivy coordinates.
-   */
-  def addArtifact(uri: URI): Unit = {
+  private def parseArtifacts(uri: URI): Seq[Artifact] = {
     uri.getScheme match {
       case "file" =>
         val path = Paths.get(uri)
@@ -76,19 +71,26 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
           case other =>
             throw new UnsupportedOperationException(s"Unsuppoted file format: $other")
         }
-        addArtifacts(artifact :: Nil)
+        Seq[Artifact](artifact)
 
       case "ivy" =>
         val artifacts = DependencyUtils.resolveMavenDependencies(uri).map { pathString =>
           val path = Paths.get(pathString)
           newJarArtifact(path.getFileName, new LocalFile(path))
         }
-        addArtifacts(artifacts)
+        artifacts
 
       case other =>
         throw new UnsupportedOperationException(s"Unsupported scheme: $other")
     }
   }
+
+  /**
+   * Add a single artifact to the session.
+   *
+   * Currently this supports local files and ivy coordinates.
+   */
+  def addArtifact(uri: URI): Unit = addArtifacts(parseArtifacts(uri))
 
   /**
    * Ensure that all artifacts added to this point have been uploaded to the server, and are ready
@@ -97,6 +99,13 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
   private[client] def ensureAllArtifactsUploaded(): Unit = {
     addArtifacts(classFinders.asScala.flatMap(_.findClasses()))
   }
+
+  /**
+   * Add multiple artifacts to the session.
+   *
+   * Currently this supports local files and ivy coordinates.
+   */
+  def addArtifacts(uris: URI*): Unit = addArtifacts(uris.flatMap(parseArtifacts))
 
   /**
    * Add a number of artifacts to the session.
@@ -222,6 +231,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
       val artifactChunkBuilder = proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
       var dataChunk = readNextChunk(in)
       def getNumChunks(size: Long) = (size + (chunkSize - 1)) / chunkSize
+
       builder.getBeginChunkBuilder
         .setName(artifact.path.toString)
         .setTotalBytes(artifact.size)
