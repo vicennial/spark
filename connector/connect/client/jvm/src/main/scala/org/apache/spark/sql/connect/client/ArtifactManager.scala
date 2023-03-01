@@ -65,7 +65,8 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
       case "file" =>
         val path = Paths.get(uri)
         val artifact = path.getFileName.toString match {
-          case jar if jar.endsWith(".jar") => newJarArtifact(path.getFileName, new LocalFile(path))
+          case jar if jar.endsWith(".jar") =>
+            newJarArtifact(path.getFileName, new LocalFile(path))
           case cf if cf.endsWith(".class") =>
             newClassArtifact(path.getFileName, new LocalFile(path))
           case other =>
@@ -93,10 +94,9 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
   def addArtifact(uri: URI): Unit = addArtifacts(parseArtifacts(uri))
 
   /**
-   * Ensure that all artifacts added to this point have been uploaded to the server, and are ready
-   * for use. This method will fail if it finds any problem with the outstanding requests.
+   * Ensure that all classfile artifacts have been uploaded to the server, and are ready for use.
    */
-  private[client] def ensureAllArtifactsUploaded(): Unit = {
+  private[client] def ensureAllClassFileArtifactsUploaded(): Unit = {
     addArtifacts(classFinders.asScala.flatMap(_.findClasses()))
   }
 

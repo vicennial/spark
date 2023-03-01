@@ -183,7 +183,7 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     val file4 = artifactFilePath.resolve("smallJar.jar").toUri
     artifactManager.addArtifacts(file1, file2, file3, file4)
     val receivedRequests = service.getAndClearLatestAddArtifactRequests()
-    assert(receivedRequests.size ==  1 + 12 + 1)
+    assert(receivedRequests.size == 1 + 12 + 1)
 
     val firstReqBatch = receivedRequests.head.getBatch.getArtifactsList
     assert(firstReqBatch.size() == 1)
