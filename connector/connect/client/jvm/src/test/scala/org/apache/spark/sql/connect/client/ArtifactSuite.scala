@@ -1,0 +1,116 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.spark.sql.connect.client
+
+import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
+import java.util.zip.{CheckedInputStream, CRC32}
+
+import com.google.protobuf.ByteString
+import io.grpc.{ManagedChannel, Server}
+import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
+import org.scalatest.BeforeAndAfterEach
+
+import org.apache.spark.connect.proto
+import org.apache.spark.connect.proto.AddArtifactsRequest
+import org.apache.spark.sql.connect.client.util.ConnectFunSuite
+
+
+class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
+
+  private var client: SparkConnectClient = _
+  private var service: DummySparkConnectService = _
+  private var server: Server = _
+  private var artifactManager: ArtifactManager = _
+  private var channel: ManagedChannel = _
+
+  private def startDummyServer(): Unit = {
+    service = new DummySparkConnectService()
+    server = InProcessServerBuilder
+      .forName(getClass.getName)
+      .addService(service)
+      .build()
+    server.start()
+  }
+
+  private def createArtifactManager(): Unit = {
+    channel = InProcessChannelBuilder.forName(getClass.getName).directExecutor().build()
+    artifactManager = new ArtifactManager(proto.UserContext.newBuilder().build(), channel)
+  }
+
+  override def beforeEach(): Unit = {
+    super.beforeEach()
+    startDummyServer()
+    createArtifactManager()
+    client = null
+  }
+
+  override def afterEach(): Unit = {
+    if (server != null) {
+      server.shutdownNow()
+      assert(server.awaitTermination(5, TimeUnit.SECONDS), "server failed to shutdown")
+    }
+
+    if (channel != null) {
+      channel.shutdownNow()
+    }
+
+    if (client != null) {
+      client.shutdown()
+    }
+  }
+
+  private val chunkSize: Int = 32 * 1024
+  protected def artifactFilePath: Path = baseResourcePath.resolve("artifact-tests")
+
+  private def assertFileDataEquality(
+      artifactChunk: AddArtifactsRequest.ArtifactChunk,
+      localPath: Path): Unit = {
+    val in = new CheckedInputStream(Files.newInputStream(localPath), new CRC32)
+    val localData = ByteString.readFrom(in)
+    assert(artifactChunk.getData == localData)
+    assert(artifactChunk.getCrc == in.getChecksum.getValue)
+  }
+
+  private def singleChunkArtifactTest(path: String): Unit = {
+    test(s"Single Chunk Artifact - $path") {
+      val artifactPath = artifactFilePath.resolve(path)
+      artifactManager.addArtifact(artifactPath.toString)
+
+      val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+      assert(receivedRequests.size == 1)
+
+      val request = receivedRequests.head
+      assert(request.hasBatch)
+
+      val batch = request.getBatch
+      assert(batch.getArtifactsList.size() == 1)
+
+      val singleChunkArtifact = batch.getArtifacts(0)
+      val namePrefix = artifactPath.getFileName.toString match {
+        case jar if jar.endsWith(".jar") => "jars"
+        case cf if cf.endsWith(".class") => "classes"
+      }
+      assert(singleChunkArtifact.getName.equals(namePrefix + "/" + path))
+      assertFileDataEquality(singleChunkArtifact.getData, artifactPath)
+    }
+  }
+
+  singleChunkArtifactTest("smallClassFile.class")
+
+  singleChunkArtifactTest("smallJar.jar")
+}

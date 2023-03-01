@@ -69,7 +69,13 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     uri.getScheme match {
       case "file" =>
         val path = Paths.get(uri)
-        val artifact = newJarArtifact(path.getFileName, new LocalFile(path))
+        val artifact = path.getFileName.toString match {
+          case jar if jar.endsWith(".jar") => newJarArtifact(path.getFileName, new LocalFile(path))
+          case cf if cf.endsWith(".class") =>
+            newClassArtifact(path.getFileName, new LocalFile(path))
+          case other =>
+            throw new UnsupportedOperationException(s"Unsuppoted file format: $other")
+        }
         addArtifacts(artifact :: Nil)
 
       case "ivy" =>
