@@ -123,7 +123,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
         promise.failure(throwable)
       }
       override def onCompleted(): Unit = {
-        promise.success(summaries)
+        promise.success(summaries.toSeq)
       }
     }
     val stream = stub.addArtifacts(responseHandler)
@@ -136,7 +136,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     }
 
     def writeBatch(): Unit = {
-      addBatchedArtifacts(currentBatch, stream)
+      addBatchedArtifacts(currentBatch.toSeq, stream)
       currentBatch.clear()
       currentBatchSize = 0
     }
