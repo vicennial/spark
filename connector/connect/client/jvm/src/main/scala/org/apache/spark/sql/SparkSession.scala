@@ -300,15 +300,15 @@ class SparkSession private[sql] (
    *
    * Currently this supports local files and ivy coordinates.
    *
+   * For Ivy, the URI format should be: `ivy://group:module:version[?query]` Ivy URI query part
+   * format should be: `parameter=value&parameter=value...` Note that currently Ivy URI query part
+   * support two parameters:
    *
-   * For Ivy, the URI format should be: `ivy://group:module:version[?query]`
-   * Ivy URI query part format should be:
-   *  `parameter=value&parameter=value...`
-   * Note that currently Ivy URI query part support two parameters:
-   *  1. transitive: whether to download dependent jars related to your Ivy URI.
-   *     transitive=false or `transitive=true`, if not set, the default value is true.
-   *  2. exclude: exclusion list when download Ivy URI jar and dependency jars.
-   *     The `exclude` parameter content is a ',' separated `group:module` pair string :
+   *   - transitive: whether to download dependent jars related to your Ivy URI. transitive=false
+   *     or `transitive=true`, if not set, the default value is true.
+   *
+   *   - exclude: exclusion list when download Ivy URI jar and dependency jars. The `exclude`
+   *     parameter content is a ',' separated `group:module` pair string :
    *     `exclude=group:module,group:module...`
    */
   def addArtifact(uri: URI): Unit = client.addArtifact(uri)
@@ -318,14 +318,15 @@ class SparkSession private[sql] (
    *
    * Currently this supports local files and ivy coordinates.
    *
-   * For Ivy, the URI format should be: `ivy://group:module:version[?query]`
-   * Ivy URI query part format should be:
-   *  `parameter=value&parameter=value...`
-   * Note that currently Ivy URI query part support two parameters:
-   *  1. transitive: whether to download dependent jars related to your Ivy URI.
-   *     transitive=false or `transitive=true`, if not set, the default value is true.
-   *  2. exclude: exclusion list when download Ivy URI jar and dependency jars.
-   *     The `exclude` parameter content is a ',' separated `group:module` pair string :
+   * For Ivy, the URI format should be: `ivy://group:module:version[?query]` Ivy URI query part
+   * format should be: `parameter=value&parameter=value...` Note that currently Ivy URI query part
+   * support two parameters:
+   *
+   *   - transitive: whether to download dependent jars related to your Ivy URI. transitive=false
+   *     or `transitive=true`, if not set, the default value is true.
+   *
+   *   - exclude: exclusion list when download Ivy URI jar and dependency jars. The `exclude`
+   *     parameter content is a ',' separated `group:module` pair string :
    *     `exclude=group:module,group:module...`
    */
   @scala.annotation.varargs
