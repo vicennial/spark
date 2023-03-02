@@ -38,10 +38,16 @@ import org.apache.spark.connect.proto.AddArtifactsResponse
 import org.apache.spark.connect.proto.AddArtifactsResponse.ArtifactSummary
 import org.apache.spark.util.{DependencyUtils, ThreadUtils, Utils}
 
+/**
+ * The Artifact Manager is responsible for handling and transferring artifacts from the local
+ * client to the server (local/remote).
+ * @param userContext
+ * @param channel
+ */
 class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
   // Using the midpoint recommendation of 32KiB for chunk size as specified in
   // https://github.com/grpc/grpc.github.io/issues/371.
-  private val chunkSize: Int = 32 * 1024
+  private val CHUNK_SIZE: Int = 32 * 1024
 
   private[this] val stub = proto.SparkConnectServiceGrpc.newStub(channel)
   private[this] val classFinders = new CopyOnWriteArrayList[ClassFinder]
@@ -61,9 +67,11 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
   }
 
   private def parseArtifacts(uri: URI): Seq[Artifact] = {
+    // Currently only local files and ivy coordinates are supported.
     uri.getScheme match {
       case "file" =>
         val path = Paths.get(uri)
+        // Currently only ".jar" and ".class" extensions are supported.
         val artifact = path.getFileName.toString match {
           case jar if jar.endsWith(".jar") =>
             newJarArtifact(path.getFileName, new LocalFile(path))
@@ -105,12 +113,12 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
    *
    * Currently this supports local files and ivy coordinates.
    */
-  def addArtifacts(uris: URI*): Unit = addArtifacts(uris.flatMap(parseArtifacts))
+  def addArtifacts(uris: Seq[URI]): Unit = addArtifacts(uris.flatMap(parseArtifacts))
 
   /**
    * Add a number of artifacts to the session.
    */
-  private[client] def addArtifacts(artifacts: Iterable[Artifact]): Unit = {
+  private def addArtifacts(artifacts: Iterable[Artifact]): Unit = {
     val promise = Promise[Seq[ArtifactSummary]]
     val responseHandler = new StreamObserver[proto.AddArtifactsResponse] {
       private val summaries = mutable.Buffer.empty[ArtifactSummary]
@@ -144,7 +152,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     artifacts.iterator.foreach { artifact =>
       val data = artifact.storage.asInstanceOf[LocalData]
       val size = data.size
-      if (size > chunkSize) {
+      if (size > CHUNK_SIZE) {
         // Payload can either be a batch OR a single chunked artifact. Write batch if non-empty
         // before chunking current artifact.
         if (currentBatch.nonEmpty) {
@@ -152,7 +160,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
         }
         addChunkedArtifact(artifact, stream)
       } else {
-        if (currentBatchSize + size > chunkSize) {
+        if (currentBatchSize + size > CHUNK_SIZE) {
           writeBatch()
         }
         addToBatch(artifact, size)
@@ -163,6 +171,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     }
     stream.onCompleted()
     ThreadUtils.awaitResult(promise.future, Duration.Inf)
+    // TODO: Handle responses containing CRC failures.
   }
 
   /**
@@ -199,12 +208,18 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
     stream.onNext(builder.build())
   }
 
+  /**
+   * Read data from an [[InputStream]] in pieces of `chunkSize` bytes and convert to
+   * protobuf-compatible [[ByteString]].
+   * @param in
+   * @return
+   */
   private def readNextChunk(in: InputStream): ByteString = {
-    val buf = new Array[Byte](chunkSize)
+    val buf = new Array[Byte](CHUNK_SIZE)
     var bytesRead = 0
     var count = 0
-    while (count != -1 && bytesRead < chunkSize) {
-      count = in.read(buf, bytesRead, chunkSize - bytesRead)
+    while (count != -1 && bytesRead < CHUNK_SIZE) {
+      count = in.read(buf, bytesRead, CHUNK_SIZE - bytesRead)
       if (count != -1) {
         bytesRead += count
       }
@@ -230,7 +245,8 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
       // Subsequent RPCs contains the `ArtifactChunk` payload (`chunk`).
       val artifactChunkBuilder = proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
       var dataChunk = readNextChunk(in)
-      def getNumChunks(size: Long) = (size + (chunkSize - 1)) / chunkSize
+      // Integer division that rounds up to the nearest whole number.
+      def getNumChunks(size: Long): Long = (size + (CHUNK_SIZE - 1)) / CHUNK_SIZE
 
       builder.getBeginChunkBuilder
         .setName(artifact.path.toString)
@@ -244,6 +260,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
       builder.clearBeginChunk()
 
       dataChunk = readNextChunk(in)
+      // Consume stream in chunks until there is no data left to read.
       while (!dataChunk.isEmpty) {
         artifactChunkBuilder.setData(dataChunk).setCrc(in.getChecksum.getValue)
         builder.setChunk(artifactChunkBuilder.build())

@@ -164,6 +164,14 @@ private[sql] class SparkConnectClient(
   def addArtifact(uri: URI): Unit = artifactManager.addArtifact(uri)
 
   /**
+   * Add multiple artifacts to the session.
+   *
+   * Currently this supports local files and ivy coordinates.
+   */
+  @scala.annotation.varargs
+  def addArtifacts(uri: URI*): Unit = artifactManager.addArtifacts(uri)
+
+  /**
    * Shutdown the client's connection to the server.
    */
   def shutdown(): Unit = {

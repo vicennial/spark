@@ -74,9 +74,15 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     }
   }
 
-  private val chunkSize: Int = 32 * 1024
+  private val CHUNK_SIZE: Int = 32 * 1024
   protected def artifactFilePath: Path = baseResourcePath.resolve("artifact-tests")
 
+  /**
+   * Check if the data sent to the server (stored in `artifactChunk`) is equivalent to the local
+   * data at `localPath`.
+   * @param artifactChunk
+   * @param localPath
+   */
   private def assertFileDataEquality(
       artifactChunk: AddArtifactsRequest.ArtifactChunk,
       localPath: Path): Unit = {
@@ -92,12 +98,14 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
       artifactManager.addArtifact(artifactPath.toString)
 
       val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+      // Single `AddArtifactRequest`
       assert(receivedRequests.size == 1)
 
       val request = receivedRequests.head
       assert(request.hasBatch)
 
       val batch = request.getBatch
+      // Single artifact in batch
       assert(batch.getArtifactsList.size() == 1)
 
       val singleChunkArtifact = batch.getArtifacts(0)
@@ -115,11 +123,11 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
   singleChunkArtifactTest("smallJar.jar")
 
   private def readNextChunk(in: InputStream): ByteString = {
-    val buf = new Array[Byte](chunkSize)
+    val buf = new Array[Byte](CHUNK_SIZE)
     var bytesRead = 0
     var count = 0
-    while (count != -1 && bytesRead < chunkSize) {
-      count = in.read(buf, bytesRead, chunkSize - bytesRead)
+    while (count != -1 && bytesRead < CHUNK_SIZE) {
+      count = in.read(buf, bytesRead, CHUNK_SIZE - bytesRead)
       if (count != -1) {
         bytesRead += count
       }
@@ -128,6 +136,13 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     else ByteString.copyFrom(buf, 0, bytesRead)
   }
 
+  /**
+   * Read data in a chunk of `CHUNK_SIZE` bytes from `in` and verify equality with server-side
+   * data stored in `chunk`.
+   * @param in
+   * @param chunk
+   * @return
+   */
   private def checkChunkDataAndCrc(
       in: CheckedInputStream,
       chunk: AddArtifactsRequest.ArtifactChunk): Boolean = {
@@ -141,7 +156,9 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     artifactManager.addArtifact(artifactPath.toString)
     val in = new CheckedInputStream(Files.newInputStream(artifactPath), new CRC32)
 
-    val expectedChunks = (384581 + (chunkSize - 1)) / chunkSize
+    // Expected chunks = roundUp( file_size / chunk_size) = 12
+    // File size of `junitLargeJar.jar` is 384581 bytes.
+    val expectedChunks = (384581 + (CHUNK_SIZE - 1)) / CHUNK_SIZE
     val receivedRequests = service.getAndClearLatestAddArtifactRequests()
     assert(384581 == Files.size(artifactPath))
     assert(receivedRequests.size == expectedChunks)
@@ -151,15 +168,16 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     assert(beginChunkRequest.getTotalBytes == 384581)
     assert(beginChunkRequest.getNumChunks == expectedChunks)
     checkChunkDataAndCrc(in, beginChunkRequest.getInitialChunk)
-
+    // Check remaining `ArtifactChunk`s for data equality.
     receivedRequests.drop(1).forall(r => r.hasChunk && checkChunkDataAndCrc(in, r.getChunk))
   }
 
   test("Batched SingleChunkArtifacts") {
     val file1 = artifactFilePath.resolve("smallClassFile.class").toUri
     val file2 = artifactFilePath.resolve("smallJar.jar").toUri
-    artifactManager.addArtifacts(file1, file2)
+    artifactManager.addArtifacts(Seq(file1, file2))
     val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+    // Single request containing 2 artifacts.
     assert(receivedRequests.size == 1)
 
     val request = receivedRequests.head
@@ -181,8 +199,15 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     val file2 = artifactFilePath.resolve("junitLargeJar.jar").toUri
     val file3 = artifactFilePath.resolve("smallClassFileDup.class").toUri
     val file4 = artifactFilePath.resolve("smallJar.jar").toUri
-    artifactManager.addArtifacts(file1, file2, file3, file4)
+    artifactManager.addArtifacts(Seq(file1, file2, file3, file4))
     val receivedRequests = service.getAndClearLatestAddArtifactRequests()
+    // There are a total of 14 requests.
+    // The 1st request contains a single artifact - smallClassFile.class (There are no
+    // other artifacts batched with it since the next one is large multi-chunk artifact)
+    // Requests 2-13 (1-indexed) belong to the transfer of junitLargeJar.jar. This includes
+    // the first "beginning chunk" and the subsequent data chunks.
+    // The last request (14) contains both smallClassFileDup.class and smallJar.jar batched
+    // together.
     assert(receivedRequests.size == 1 + 12 + 1)
 
     val firstReqBatch = receivedRequests.head.getBatch.getArtifactsList
@@ -198,6 +223,7 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
     assert(beginChunkRequest.getNumChunks == 12)
     val file2in = new CheckedInputStream(Files.newInputStream(Paths.get(file2)), new CRC32)
     checkChunkDataAndCrc(file2in, beginChunkRequest.getInitialChunk)
+    // Large artifact data chunks are requests number 3 to 13.
     receivedRequests
       .drop(2)
       .dropRight(1)
