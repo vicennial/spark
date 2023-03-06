@@ -272,20 +272,19 @@ object SparkConnectService {
 
     def addArtifact(session: SparkSession, remotePath: Path, stagingPath: Path): Unit = {
       require(!remotePath.isAbsolute)
-      val isJar = remotePath.startsWith("jars")
-      val isClass = remotePath.startsWith("classes")
-      require(isJar || isClass)
-      if (isJar) {
-        val target = artifactRootPath.resolve(remotePath)
-        Files.createDirectories(target.getParent)
-        Files.move(stagingPath, target)
-        // Adding Jars to the underlying spark context (visible to all users)
-        session.sparkContext.addJar(target.toString)
-      } else {
-        // Move class files to common location
+      if (remotePath.startsWith("classes")) {
+        // Move class files to common location (shared among all users)
         val target = classArtifactDir.resolve(remotePath.getFileName)
         Files.createDirectories(target.getParent)
         Files.move(stagingPath, target)
+      } else {
+        val target = artifactRootPath.resolve(remotePath)
+        Files.createDirectories(target.getParent)
+        Files.move(stagingPath, target)
+        if (remotePath.startsWith("jars")) {
+          // Adding Jars to the underlying spark context (visible to all users)
+          session.sparkContext.addJar(target.toString)
+        }
       }
     }
   }
