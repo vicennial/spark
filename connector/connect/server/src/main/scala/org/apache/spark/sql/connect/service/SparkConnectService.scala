@@ -283,7 +283,7 @@ object SparkConnectService {
         Files.move(stagingPath, target)
         if (remotePath.startsWith("jars")) {
           // Adding Jars to the underlying spark context (visible to all users)
-          session.sparkContext.addJar(target.toString)
+          session.sessionState.resourceLoader.addJar(target.toString)
         }
       }
     }
