@@ -53,4 +53,28 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     val movedClassFile = replClassFileDirectory.resolve("smallClassFile.class").toFile
     assert(movedClassFile.exists())
   }
+
+  test("Class file artifacts are added to SC classloader") {
+    val copyDir = Utils.createTempDir().toPath
+    FileUtils.copyDirectory(artifactPath.toFile, copyDir.toFile)
+    val stagingPath = copyDir.resolve("Hello.class")
+    val remotePath = Paths.get("classes/Hello.class")
+    assert(stagingPath.toFile.exists())
+    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+
+    val replClassFileDirectory = Paths.get(SparkEnv.get.conf.get("spark.repl.class.uri"))
+    val movedClassFile = replClassFileDirectory.resolve("Hello.class").toFile
+    assert(movedClassFile.exists())
+
+    val classLoader = SparkConnectService.classLoaderWithArtifacts
+
+    val instance = classLoader
+      .loadClass("Hello")
+      .getDeclaredConstructor(classOf[String])
+      .newInstance("Talon")
+
+    val msg = instance.getClass.getMethod("getMsg").invoke(instance)
+    assert(msg == "Hello Talon! Nice to meet you!")
+
+  }
 }
