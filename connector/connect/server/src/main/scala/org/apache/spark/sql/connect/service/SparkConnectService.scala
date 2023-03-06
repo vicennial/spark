@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.connect.service
 
+import java.net.URLClassLoader
+import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.TimeUnit
 
 import scala.annotation.tailrec
@@ -43,6 +45,7 @@ import org.apache.spark.connect.proto.{AddArtifactsRequest, AddArtifactsResponse
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
+import org.apache.spark.util.Utils
 
 /**
  * The SparkConnectService implementation.
@@ -188,20 +191,8 @@ class SparkConnectService(debug: Boolean)
    * @return
    */
   override def addArtifacts(responseObserver: StreamObserver[AddArtifactsResponse])
-      : StreamObserver[AddArtifactsRequest] = {
-    // TODO: Handle artifact files
-    // No-Op StreamObserver
-    new StreamObserver[AddArtifactsRequest] {
-      override def onNext(v: AddArtifactsRequest): Unit = {}
-
-      override def onError(throwable: Throwable): Unit = responseObserver.onError(throwable)
-
-      override def onCompleted(): Unit = {
-        responseObserver.onNext(proto.AddArtifactsResponse.newBuilder().build())
-        responseObserver.onCompleted()
-      }
-    }
-  }
+      : StreamObserver[AddArtifactsRequest] = new SparkConnectAddArtifactsHandler(
+    responseObserver)
 }
 
 /**
@@ -252,6 +243,55 @@ object SparkConnectService {
     }
     cacheBuilder
   }
+
+  private[connect] object Artifacts {
+
+    private[connect] val artifactRootPath = Utils.createTempDir("artifacts").toPath
+    private[connect] val artifactRootURI = {
+      val fileServer = SparkEnv.get.rpcEnv.fileServer
+      fileServer.addDirectory("artifacts", artifactRootPath.toFile)
+    }
+
+    private[connect] lazy val classArtifactUri: String = {
+      val conf = SparkEnv.get.conf
+      conf.getOption("spark.repl.class.uri").getOrElse {
+        val path = Paths.get("classes")
+        val classPath = artifactRootPath.resolve(path)
+        Files.createDirectories(classPath)
+        val fileServer = SparkEnv.get.rpcEnv.fileServer
+        val classUri =
+          fileServer.addDirectory(artifactRootURI + '/' + path.toString, classPath.toFile)
+        // Piggyback on the existing repl class uri functionality that the executor uses to load
+        // class files.
+        conf.set("spark.repl.class.uri", classUri)
+        classUri
+      }
+    }
+
+    private[connect] lazy val classArtifactDir = Paths.get(classArtifactUri)
+
+    def addArtifact(session: SparkSession, remotePath: Path, stagingPath: Path): Unit = {
+      require(!remotePath.isAbsolute)
+      val isJar = remotePath.startsWith("jars")
+      val isClass = remotePath.startsWith("classes")
+      require(isJar || isClass)
+      if (isJar) {
+        val target = artifactRootPath.resolve(remotePath)
+        Files.createDirectories(target.getParent)
+        Files.move(stagingPath, target)
+        // Adding Jars to the underlying spark context (visible to all users)
+        session.sparkContext.addJar(target.toString)
+      } else {
+        // Move class files to common location
+        val target = classArtifactDir.resolve(remotePath.getFileName)
+        Files.move(stagingPath, target)
+      }
+    }
+  }
+
+  private[connect] def classLoaderWithArtifacts: ClassLoader = new URLClassLoader(
+    Array(Artifacts.classArtifactDir.toUri.toURL),
+    Utils.getContextOrSparkClassLoader)
 
   /**
    * Based on the `key` find or create a new SparkSession.

@@ -43,7 +43,7 @@ import org.apache.spark.sql.connect.common.{DataTypeProtoConverter, InvalidPlanI
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_ARROW_MAX_BATCH_SIZE
 import org.apache.spark.sql.connect.planner.LiteralValueProtoConverter.{toCatalystExpression, toCatalystValue}
 import org.apache.spark.sql.connect.plugin.SparkConnectPluginRegistry
-import org.apache.spark.sql.connect.service.SparkConnectStreamHandler
+import org.apache.spark.sql.connect.service.{SparkConnectService, SparkConnectStreamHandler}
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.arrow.ArrowConverters
@@ -876,7 +876,9 @@ class SparkConnectPlanner(val session: SparkSession) {
   private def transformScalarScalaUDF(fun: proto.CommonInlineUserDefinedFunction): ScalaUDF = {
     val udf = fun.getScalarScalaUdf
     val udfPacket =
-      Utils.deserialize[UdfPacket](udf.getPayload.toByteArray, Utils.getContextOrSparkClassLoader)
+      Utils.deserialize[UdfPacket](
+        udf.getPayload.toByteArray,
+        SparkConnectService.classLoaderWithArtifacts)
     ScalaUDF(
       function = udfPacket.function,
       dataType = udfPacket.outputEncoder.dataType,
