@@ -284,6 +284,7 @@ object SparkConnectService {
       } else {
         // Move class files to common location
         val target = classArtifactDir.resolve(remotePath.getFileName)
+        Files.createDirectories(target.getParent)
         Files.move(stagingPath, target)
       }
     }
