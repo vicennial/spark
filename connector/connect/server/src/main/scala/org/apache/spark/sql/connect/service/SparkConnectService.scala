@@ -19,9 +19,10 @@ package org.apache.spark.sql.connect.service
 
 import java.net.URLClassLoader
 import java.nio.file.{Files, Path, Paths}
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CopyOnWriteArrayList, TimeUnit}
 
 import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
 
@@ -269,6 +270,8 @@ object SparkConnectService {
 
     private[connect] val classArtifactDir = Paths.get(classArtifactUri)
 
+    private[connect] val jarsList = new CopyOnWriteArrayList[Path]
+
     def addArtifact(session: SparkSession, remotePath: Path, stagingPath: Path): Unit = {
       require(!remotePath.isAbsolute)
       if (remotePath.startsWith("classes")) {
@@ -283,14 +286,23 @@ object SparkConnectService {
         if (remotePath.startsWith("jars")) {
           // Adding Jars to the underlying spark context (visible to all users)
           session.sessionState.resourceLoader.addJar(target.toString)
+          jarsList.add(target)
         }
       }
     }
   }
 
-  private[connect] def classLoaderWithArtifacts: ClassLoader = new URLClassLoader(
-    Array(Artifacts.classArtifactDir.toUri.toURL),
-    Utils.getContextOrSparkClassLoader)
+  private[connect] def withArtifactClassLoader[T](f: => T): T = {
+    Utils.withContextClassLoader(classLoaderWithArtifacts) {
+      f
+    }
+  }
+
+  private[connect] def classLoaderWithArtifacts: ClassLoader = {
+    val urls =
+      Artifacts.jarsList.asScala.map(_.toUri.toURL) :+ Artifacts.classArtifactDir.toUri.toURL
+    new URLClassLoader(urls.toArray, Utils.getContextOrSparkClassLoader)
+  }
 
   /**
    * Based on the `key` find or create a new SparkSession.

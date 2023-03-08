@@ -40,7 +40,7 @@ import org.apache.spark.util.ThreadUtils
 class SparkConnectStreamHandler(responseObserver: StreamObserver[ExecutePlanResponse])
     extends Logging {
 
-  def handle(v: ExecutePlanRequest): Unit = {
+  def handle(v: ExecutePlanRequest): Unit = SparkConnectService.withArtifactClassLoader {
     val session =
       SparkConnectService
         .getOrCreateIsolatedSession(v.getUserContext.getUserId, v.getClientId)

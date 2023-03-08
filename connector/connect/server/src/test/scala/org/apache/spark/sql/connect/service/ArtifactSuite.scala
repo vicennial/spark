@@ -24,7 +24,6 @@ import org.apache.spark.sql.connect.ResourceHelper
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.util.Utils
 
-
 class ArtifactSuite extends SharedSparkSession with ResourceHelper {
 
   private val artifactPath = commonResourcePath.resolve("artifact-tests")

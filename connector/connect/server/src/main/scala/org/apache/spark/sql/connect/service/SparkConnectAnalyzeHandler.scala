@@ -32,17 +32,18 @@ private[connect] class SparkConnectAnalyzeHandler(
     responseObserver: StreamObserver[proto.AnalyzePlanResponse])
     extends Logging {
 
-  def handle(request: proto.AnalyzePlanRequest): Unit = {
-    val session =
-      SparkConnectService
-        .getOrCreateIsolatedSession(request.getUserContext.getUserId, request.getClientId)
-        .session
-    session.withActive {
-      val response = process(request, session)
-      responseObserver.onNext(response)
-      responseObserver.onCompleted()
+  def handle(request: proto.AnalyzePlanRequest): Unit =
+    SparkConnectService.withArtifactClassLoader {
+      val session =
+        SparkConnectService
+          .getOrCreateIsolatedSession(request.getUserContext.getUserId, request.getClientId)
+          .session
+      session.withActive {
+        val response = process(request, session)
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+      }
     }
-  }
 
   def process(
       request: proto.AnalyzePlanRequest,
