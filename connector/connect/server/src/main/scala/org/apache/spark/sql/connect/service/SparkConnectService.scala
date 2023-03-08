@@ -252,23 +252,22 @@ object SparkConnectService {
       fileServer.addDirectory("artifacts", artifactRootPath.toFile)
     }
 
-    private[connect] lazy val classArtifactUri: String = {
+    private[connect] val classArtifactUri: String = {
       val conf = SparkEnv.get.conf
+      // If set, piggyback on the existing repl class uri functionality that the executor uses
+      // to load class files.
       conf.getOption("spark.repl.class.uri").getOrElse {
         val path = Paths.get("classes")
-        val classPath = artifactRootPath.resolve(path)
-        Files.createDirectories(classPath)
+        val classPathDirectory = artifactRootPath.resolve(path)
+        Files.createDirectories(classPathDirectory)
         val fileServer = SparkEnv.get.rpcEnv.fileServer
         val classUri =
-          fileServer.addDirectory(artifactRootURI + '/' + path.toString, classPath.toFile)
-        // Piggyback on the existing repl class uri functionality that the executor uses to load
-        // class files.
-        conf.set("spark.repl.class.uri", classUri)
+          fileServer.addDirectory(artifactRootURI + "/classes", classPathDirectory.toFile)
         classUri
       }
     }
 
-    private[connect] lazy val classArtifactDir = Paths.get(classArtifactUri)
+    private[connect] val classArtifactDir = Paths.get(classArtifactUri)
 
     def addArtifact(session: SparkSession, remotePath: Path, stagingPath: Path): Unit = {
       require(!remotePath.isAbsolute)

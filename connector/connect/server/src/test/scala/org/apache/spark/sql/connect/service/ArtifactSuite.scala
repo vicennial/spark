@@ -20,7 +20,6 @@ import java.nio.file.Paths
 
 import org.apache.commons.io.FileUtils
 
-import org.apache.spark.SparkEnv
 import org.apache.spark.sql.connect.ResourceHelper
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.util.Utils
@@ -41,7 +40,7 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     assert(jarList.exists(_.contains(remotePath.toString)))
   }
 
-  test("Class artifacts are added to repl directory.") {
+  test("Class artifacts are added to the correct directory.") {
     val copyDir = Utils.createTempDir().toPath
     FileUtils.copyDirectory(artifactPath.toFile, copyDir.toFile)
     val stagingPath = copyDir.resolve("smallClassFile.class")
@@ -49,8 +48,8 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     assert(stagingPath.toFile.exists())
     SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
 
-    val replClassFileDirectory = Paths.get(SparkEnv.get.conf.get("spark.repl.class.uri"))
-    val movedClassFile = replClassFileDirectory.resolve("smallClassFile.class").toFile
+    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val movedClassFile = classFileDirectory.resolve("smallClassFile.class").toFile
     assert(movedClassFile.exists())
   }
 
@@ -62,8 +61,8 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     assert(stagingPath.toFile.exists())
     SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
 
-    val replClassFileDirectory = Paths.get(SparkEnv.get.conf.get("spark.repl.class.uri"))
-    val movedClassFile = replClassFileDirectory.resolve("Hello.class").toFile
+    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val movedClassFile = classFileDirectory.resolve("Hello.class").toFile
     assert(movedClassFile.exists())
 
     val classLoader = SparkConnectService.classLoaderWithArtifacts
@@ -75,6 +74,5 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
 
     val msg = instance.getClass.getMethod("getMsg").invoke(instance)
     assert(msg == "Hello Talon! Nice to meet you!")
-
   }
 }
