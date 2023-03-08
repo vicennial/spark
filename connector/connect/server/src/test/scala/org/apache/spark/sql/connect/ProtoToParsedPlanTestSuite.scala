@@ -78,6 +78,10 @@ class ProtoToParsedPlanTestSuite
     conn = DriverManager.getConnection(url, properties)
     conn.prepareStatement("create schema test").executeUpdate()
     conn
+      .prepareStatement(
+        "create table test.people (name TEXT(32) NOT NULL, theid INTEGER NOT NULL)")
+      .executeUpdate()
+    conn
       .prepareStatement("create table test.timetypes (a TIME, b DATE, c TIMESTAMP(7))")
       .executeUpdate()
     conn
