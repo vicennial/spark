@@ -432,6 +432,9 @@ class SparkSession private[sql] (
   @Experimental
   def addArtifact(path: String): Unit = client.addArtifact(path)
 
+  @Experimental
+  def addArtifact(name: String, bytes: Array[Byte]): Unit = client.addArtifact(name, bytes)
+
   /**
    * Add a single artifact to the client session.
    *

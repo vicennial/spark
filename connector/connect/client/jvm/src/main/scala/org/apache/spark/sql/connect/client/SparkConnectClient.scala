@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.connect.client
 
-import io.grpc.{CallCredentials, CallOptions, Channel, ClientCall, ClientInterceptor, CompositeChannelCredentials, ForwardingClientCall, Grpc, InsecureChannelCredentials, ManagedChannel, Metadata, MethodDescriptor, Status, TlsChannelCredentials}
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.Executor
+
+import io.grpc.{CallCredentials, CallOptions, Channel, ClientCall, ClientInterceptor, CompositeChannelCredentials, ForwardingClientCall, Grpc, InsecureChannelCredentials, ManagedChannel, Metadata, MethodDescriptor, Status, TlsChannelCredentials}
 
 import org.apache.spark.connect.proto
 import org.apache.spark.connect.proto.UserContext
@@ -173,6 +174,9 @@ private[sql] class SparkConnectClient(
    * Currently only local files with extensions .jar and .class are supported.
    */
   def addArtifact(path: String): Unit = artifactManager.addArtifact(path)
+
+  def addArtifact(name: String, bytes: Array[Byte]): Unit =
+    artifactManager.addArtifact(name, bytes)
 
   /**
    * Add a single artifact to the client session.

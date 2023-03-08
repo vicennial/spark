@@ -16,11 +16,11 @@
  */
 package org.apache.spark.sql.connect.service
 
-import java.nio.file.Paths
-
+import java.nio.file.{Files, Paths}
 import org.apache.commons.io.FileUtils
-
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.connect.ResourceHelper
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.util.Utils
 
@@ -73,5 +73,29 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
 
     val msg = instance.getClass.getMethod("getMsg").invoke(instance)
     assert(msg == "Hello Talon! Nice to meet you!")
+  }
+
+  test("UDF can reference added class file") {
+    val copyDir = Utils.createTempDir().toPath
+    FileUtils.copyDirectory(artifactPath.toFile, copyDir.toFile)
+    val stagingPath = copyDir.resolve("my/stuff/HelloWorld.class")
+    val remotePath = Paths.get("classes/my/stuff/HelloWorld.class")
+    assert(stagingPath.toFile.exists())
+    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+
+    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val movedClassFile = classFileDirectory.resolve("my/stuff/HelloWorld.class").toFile
+    assert(movedClassFile.exists())
+
+    val classLoader = SparkConnectService.classLoaderWithArtifacts
+
+    val instance = classLoader
+      .loadClass("my.stuff.HelloWorld")
+      .getDeclaredConstructor(classOf[String])
+      .newInstance("Talon")
+      .asInstanceOf[String => String]
+    val udf = org.apache.spark.sql.functions.udf(instance)
+    val session = SparkConnectService.getOrCreateIsolatedSession("c1", "session").session
+    session.range(10).select(udf(col("id").cast("string"))).collect()
   }
 }

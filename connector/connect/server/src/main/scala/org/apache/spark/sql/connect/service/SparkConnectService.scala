@@ -253,22 +253,22 @@ object SparkConnectService {
       fileServer.addDirectory("artifacts", artifactRootPath.toFile)
     }
 
+    private[connect] val classArtifactDir = {
+      val dir = SparkEnv.get.conf.getOption("spark.repl.class.outputDir").map(p => Paths.get(p))
+        .getOrElse(artifactRootPath.resolve("classes"))
+      Files.createDirectories(dir)
+      dir
+    }
+
     private[connect] val classArtifactUri: String = {
       val conf = SparkEnv.get.conf
       // If set, piggyback on the existing repl class uri functionality that the executor uses
       // to load class files.
       conf.getOption("spark.repl.class.uri").getOrElse {
-        val path = Paths.get("classes")
-        val classPathDirectory = artifactRootPath.resolve(path)
-        Files.createDirectories(classPathDirectory)
         val fileServer = SparkEnv.get.rpcEnv.fileServer
-        val classUri =
-          fileServer.addDirectory(artifactRootURI + "/classes", classPathDirectory.toFile)
-        classUri
+        fileServer.addDirectory(artifactRootURI + "/classes", classArtifactDir.toFile)
       }
     }
-
-    private[connect] val classArtifactDir = Paths.get(classArtifactUri)
 
     private[connect] val jarsList = new CopyOnWriteArrayList[Path]
 
@@ -276,7 +276,7 @@ object SparkConnectService {
       require(!remotePath.isAbsolute)
       if (remotePath.startsWith("classes")) {
         // Move class files to common location (shared among all users)
-        val target = classArtifactDir.resolve(remotePath.getFileName)
+        val target = classArtifactDir.resolve(remotePath.toString.stripPrefix("classes/"))
         Files.createDirectories(target.getParent)
         Files.move(stagingPath, target)
       } else {

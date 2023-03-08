@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.connect.client
 
-import java.io.InputStream
+import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.zip.{CheckedInputStream, CRC32}
@@ -69,7 +69,7 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
           case cf if cf.endsWith(".class") =>
             newClassArtifact(path.getFileName, new LocalFile(path))
           case other =>
-            throw new UnsupportedOperationException(s"Unsuppoted file format: $other")
+            throw new UnsupportedOperationException(s"Unsupported file format: $other")
         }
         Seq[Artifact](artifact)
 
@@ -84,6 +84,18 @@ class ArtifactManager(userContext: proto.UserContext, channel: ManagedChannel) {
    * Currently only local files with extensions .jar and .class are supported.
    */
   def addArtifact(uri: URI): Unit = addArtifacts(parseArtifacts(uri))
+
+  def addArtifact(name: String, bytes: Array[Byte]): Unit = {
+    val artifact = name match {
+      case jar if jar.endsWith(".jar") =>
+        newJarArtifact(Paths.get(name), new LocalBytes(bytes))
+      case cf if cf.endsWith(".class") =>
+        newClassArtifact(Paths.get(name), new LocalBytes(bytes))
+      case other =>
+        throw new UnsupportedOperationException(s"Unsupported file format: $other")
+    }
+    addArtifacts(artifact :: Nil)
+  }
 
   /**
    * Add multiple artifacts to the session.
@@ -290,7 +302,7 @@ object Artifact {
   /**
    * Payload stored on this machine.
    */
-  sealed trait LocalData {
+  trait LocalData {
     def stream: InputStream
     def size: Long
   }
@@ -301,5 +313,10 @@ object Artifact {
   class LocalFile(val path: Path) extends LocalData {
     override def size: Long = Files.size(path)
     override def stream: InputStream = Files.newInputStream(path)
+  }
+
+  class LocalBytes(bytes: Array[Byte]) extends LocalData {
+    override def stream: InputStream = new ByteArrayInputStream(bytes)
+    override def size: Long = bytes.length
   }
 }
