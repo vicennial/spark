@@ -40,7 +40,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     if (this.holder == null) {
       val holder = SparkConnectService.getOrCreateIsolatedSession(
         req.getUserContext.getUserId,
-        req.getClientId)
+        req.getSessionId)
       this.holder = holder
     }
 
