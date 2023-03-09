@@ -17,8 +17,6 @@
 
 package org.apache.spark.executor
 
-import com.google.common.cache.CacheBuilder
-
 import java.io.{File, NotSerializableException}
 import java.lang.Thread.UncaughtExceptionHandler
 import java.lang.management.ManagementFactory
@@ -30,13 +28,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import javax.annotation.concurrent.GuardedBy
 import javax.ws.rs.core.UriBuilder
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map, WrappedArray}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
+
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import org.slf4j.MDC
+
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
@@ -988,8 +989,7 @@ private[spark] class Executor(
    * new classes defined by the REPL as the user types code
    */
   private def addReplClassLoaderIfNeeded(parent: ClassLoader): ClassLoader = {
-    // TODO: Remove SparkConnect-related default value when isolated classloaders are implemented.
-    val classUri = conf.get("spark.repl.class.uri", "artifacts/classes")
+    val classUri = conf.get("spark.repl.class.uri", null)
     if (classUri != null) {
       logInfo("Using REPL class URI: " + classUri)
       try {
