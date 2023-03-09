@@ -26,6 +26,7 @@ import scala.util.control.NonFatal
 import org.apache.spark.connect.proto
 import org.apache.spark.connect.proto.{AddArtifactsRequest, AddArtifactsResponse}
 import org.apache.spark.connect.proto.AddArtifactsResponse.ArtifactSummary
+import org.apache.spark.sql.connect.artifact.SparkConnectArtifactManager
 import org.apache.spark.util.Utils
 
 class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddArtifactsResponse])

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.connect.service
+package org.apache.spark.sql.connect.artifact
 
 import java.net.{URL, URLClassLoader}
 import java.nio.file.{Files, Path, Paths}
@@ -26,7 +26,6 @@ import scala.collection.JavaConverters._
 import org.apache.spark.SparkEnv
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.Utils
-
 
 class SparkConnectArtifactManager private {
 

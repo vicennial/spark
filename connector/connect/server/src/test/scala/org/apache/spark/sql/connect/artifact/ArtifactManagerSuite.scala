@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.connect.service
+package org.apache.spark.sql.connect.artifact
 
 import java.nio.file.Paths
 
 import org.apache.commons.io.FileUtils
 
 import org.apache.spark.sql.connect.ResourceHelper
+import org.apache.spark.sql.connect.service.SparkConnectService
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.util.Utils
 
-class ArtifactSuite extends SharedSparkSession with ResourceHelper {
+class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
 
   private val artifactPath = commonResourcePath.resolve("artifact-tests")
   private lazy val artifactManager = SparkConnectArtifactManager.getOrCreateArtifactManager
