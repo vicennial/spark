@@ -16,9 +16,10 @@
  */
 package org.apache.spark.sql.connect.service
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.Paths
+
 import org.apache.commons.io.FileUtils
-import org.apache.spark.SparkConf
+
 import org.apache.spark.sql.connect.ResourceHelper
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.test.SharedSparkSession
@@ -27,13 +28,14 @@ import org.apache.spark.util.Utils
 class ArtifactSuite extends SharedSparkSession with ResourceHelper {
 
   private val artifactPath = commonResourcePath.resolve("artifact-tests")
+  private lazy val artifactManager = SparkConnectArtifactManager.getOrCreateArtifactManager
 
   test("Jar artifacts are added to spark session") {
     val copyDir = Utils.createTempDir().toPath
     FileUtils.copyDirectory(artifactPath.toFile, copyDir.toFile)
     val stagingPath = copyDir.resolve("smallJar.jar")
     val remotePath = Paths.get("jars/smallJar.jar")
-    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+    artifactManager.addArtifact(spark, remotePath, stagingPath)
 
     val jarList = spark.sparkContext.listJars()
     assert(jarList.exists(_.contains(remotePath.toString)))
@@ -45,9 +47,9 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     val stagingPath = copyDir.resolve("smallClassFile.class")
     val remotePath = Paths.get("classes/smallClassFile.class")
     assert(stagingPath.toFile.exists())
-    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+    artifactManager.addArtifact(spark, remotePath, stagingPath)
 
-    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val classFileDirectory = artifactManager.classArtifactDir
     val movedClassFile = classFileDirectory.resolve("smallClassFile.class").toFile
     assert(movedClassFile.exists())
   }
@@ -58,13 +60,13 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     val stagingPath = copyDir.resolve("Hello.class")
     val remotePath = Paths.get("classes/Hello.class")
     assert(stagingPath.toFile.exists())
-    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+    artifactManager.addArtifact(spark, remotePath, stagingPath)
 
-    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val classFileDirectory = artifactManager.classArtifactDir
     val movedClassFile = classFileDirectory.resolve("Hello.class").toFile
     assert(movedClassFile.exists())
 
-    val classLoader = SparkConnectService.classLoaderWithArtifacts
+    val classLoader = SparkConnectArtifactManager.classLoaderWithArtifacts
 
     val instance = classLoader
       .loadClass("Hello")
@@ -81,13 +83,13 @@ class ArtifactSuite extends SharedSparkSession with ResourceHelper {
     val stagingPath = copyDir.resolve("my/stuff/HelloWorld.class")
     val remotePath = Paths.get("classes/my/stuff/HelloWorld.class")
     assert(stagingPath.toFile.exists())
-    SparkConnectService.Artifacts.addArtifact(spark, remotePath, stagingPath)
+    artifactManager.addArtifact(spark, remotePath, stagingPath)
 
-    val classFileDirectory = SparkConnectService.Artifacts.classArtifactDir
+    val classFileDirectory = artifactManager.classArtifactDir
     val movedClassFile = classFileDirectory.resolve("my/stuff/HelloWorld.class").toFile
     assert(movedClassFile.exists())
 
-    val classLoader = SparkConnectService.classLoaderWithArtifacts
+    val classLoader = SparkConnectArtifactManager.classLoaderWithArtifacts
 
     val instance = classLoader
       .loadClass("my.stuff.HelloWorld")

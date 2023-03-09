@@ -33,7 +33,7 @@ private[connect] class SparkConnectAnalyzeHandler(
     extends Logging {
 
   def handle(request: proto.AnalyzePlanRequest): Unit =
-    SparkConnectService.withArtifactClassLoader {
+    SparkConnectArtifactManager.withArtifactClassLoader {
       val session =
         SparkConnectService
           .getOrCreateIsolatedSession(request.getUserContext.getUserId, request.getSessionId)

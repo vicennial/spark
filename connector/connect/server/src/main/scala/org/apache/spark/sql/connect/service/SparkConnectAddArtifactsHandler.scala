@@ -35,6 +35,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
   private val stagedArtifacts = mutable.Buffer.empty[StagedArtifact]
   private var chunkedArtifact: StagedChunkedArtifact = _
   private var holder: SessionHolder = _
+  private lazy val artifactManager = SparkConnectArtifactManager.getOrCreateArtifactManager
 
   override def onNext(req: AddArtifactsRequest): Unit = {
     if (this.holder == null) {
@@ -77,7 +78,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     // Add the artifacts to the session.
     val builder = proto.AddArtifactsResponse.newBuilder()
     stagedArtifacts.foreach { artifact =>
-      SparkConnectService.Artifacts.addArtifact(
+      artifactManager.addArtifact(
         holder.session,
         artifact.path,
         artifact.stagedPath)

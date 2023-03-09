@@ -17,12 +17,9 @@
 
 package org.apache.spark.sql.connect.service
 
-import java.net.URLClassLoader
-import java.nio.file.{Files, Path, Paths}
-import java.util.concurrent.{CopyOnWriteArrayList, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
 
@@ -46,7 +43,6 @@ import org.apache.spark.connect.proto.{AddArtifactsRequest, AddArtifactsResponse
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
-import org.apache.spark.util.Utils
 
 /**
  * The SparkConnectService implementation.
@@ -243,65 +239,6 @@ object SparkConnectService {
       cacheBuilder.expireAfterAccess(timeoutSeconds, TimeUnit.SECONDS)
     }
     cacheBuilder
-  }
-
-  private[connect] object Artifacts {
-
-    private[connect] val artifactRootPath = Utils.createTempDir("artifacts").toPath
-    private[connect] val artifactRootURI = {
-      val fileServer = SparkEnv.get.rpcEnv.fileServer
-      fileServer.addDirectory("artifacts", artifactRootPath.toFile)
-    }
-
-    private[connect] val classArtifactDir = {
-      val dir = SparkEnv.get.conf.getOption("spark.repl.class.outputDir").map(p => Paths.get(p))
-        .getOrElse(artifactRootPath.resolve("classes"))
-      Files.createDirectories(dir)
-      dir
-    }
-
-    private[connect] val classArtifactUri: String = {
-      val conf = SparkEnv.get.conf
-      // If set, piggyback on the existing repl class uri functionality that the executor uses
-      // to load class files.
-      conf.getOption("spark.repl.class.uri").getOrElse {
-        val fileServer = SparkEnv.get.rpcEnv.fileServer
-        fileServer.addDirectory(artifactRootURI + "/classes", classArtifactDir.toFile)
-      }
-    }
-
-    private[connect] val jarsList = new CopyOnWriteArrayList[Path]
-
-    def addArtifact(session: SparkSession, remotePath: Path, stagingPath: Path): Unit = {
-      require(!remotePath.isAbsolute)
-      if (remotePath.startsWith("classes")) {
-        // Move class files to common location (shared among all users)
-        val target = classArtifactDir.resolve(remotePath.toString.stripPrefix("classes/"))
-        Files.createDirectories(target.getParent)
-        Files.move(stagingPath, target)
-      } else {
-        val target = artifactRootPath.resolve(remotePath)
-        Files.createDirectories(target.getParent)
-        Files.move(stagingPath, target)
-        if (remotePath.startsWith("jars")) {
-          // Adding Jars to the underlying spark context (visible to all users)
-          session.sessionState.resourceLoader.addJar(target.toString)
-          jarsList.add(target)
-        }
-      }
-    }
-  }
-
-  private[connect] def withArtifactClassLoader[T](f: => T): T = {
-    Utils.withContextClassLoader(classLoaderWithArtifacts) {
-      f
-    }
-  }
-
-  private[connect] def classLoaderWithArtifacts: ClassLoader = {
-    val urls =
-      Artifacts.jarsList.asScala.map(_.toUri.toURL) :+ Artifacts.classArtifactDir.toUri.toURL
-    new URLClassLoader(urls.toArray, Utils.getContextOrSparkClassLoader)
   }
 
   /**
