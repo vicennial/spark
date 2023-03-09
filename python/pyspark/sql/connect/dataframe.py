@@ -16,7 +16,7 @@
 #
 from pyspark.sql.connect.utils import check_dependencies
 
-check_dependencies(__name__, __file__)
+check_dependencies(__name__)
 
 from typing import (
     Any,
@@ -1367,17 +1367,13 @@ class DataFrame:
 
     @property
     def schema(self) -> StructType:
-        if self._schema is None:
-            if self._plan is not None:
-                query = self._plan.to_proto(self._session.client)
-                if self._session is None:
-                    raise Exception("Cannot analyze without SparkSession.")
-                self._schema = self._session.client.schema(query)
-                return self._schema
-            else:
-                raise Exception("Empty plan.")
+        if self._plan is not None:
+            query = self._plan.to_proto(self._session.client)
+            if self._session is None:
+                raise Exception("Cannot analyze without SparkSession.")
+            return self._session.client.schema(query)
         else:
-            return self._schema
+            raise Exception("Empty plan.")
 
     schema.__doc__ = PySparkDataFrame.schema.__doc__
 
@@ -1589,7 +1585,7 @@ class DataFrame:
         )
 
         return DataFrame.withPlan(
-            plan.FrameMap(child=self._plan, function=udf_obj, cols=self.columns),
+            plan.MapPartitions(child=self._plan, function=udf_obj, cols=self.columns),
             session=self._session,
         )
 
