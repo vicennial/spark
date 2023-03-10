@@ -23,35 +23,34 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 import scala.collection.JavaConverters._
 
-import org.apache.spark.SparkEnv
+import org.apache.spark.{SparkContext, SparkEnv}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.Utils
 
 class SparkConnectArtifactManager private[connect] {
 
-  private[connect] val artifactRootPath = Utils.createTempDir("artifacts").toPath
-  private[connect] val artifactRootURI = {
+  private[connect] lazy val artifactRootPath = SparkContext.getActive match {
+    case Some(sc) =>
+      sc.sparkConnectArtifactDirectory.toPath
+    case None =>
+      throw new RuntimeException("SparkContext is uninitialized!")
+  }
+  private[connect] lazy val artifactRootURI = {
     val fileServer = SparkEnv.get.rpcEnv.fileServer
     fileServer.addDirectory("artifacts", artifactRootPath.toFile)
   }
 
-  private[connect] val classArtifactDir = {
-    val dir = SparkEnv.get.conf
-      .getOption("spark.repl.class.outputDir")
-      .map(p => Paths.get(p))
-      .getOrElse(artifactRootPath.resolve("classes"))
-    Files.createDirectories(dir)
-    dir
-  }
-  private[connect] val classArtifactUri: String = {
-    val conf = SparkEnv.get.conf
-    // If set, piggyback on the existing repl class uri functionality that the executor uses
-    // to load class files.
-    conf.getOption("spark.repl.class.uri").getOrElse {
-      val fileServer = SparkEnv.get.rpcEnv.fileServer
-      fileServer.addDirectory(artifactRootURI + "/classes", classArtifactDir.toFile)
+  private[connect] lazy val classArtifactDir = SparkEnv.get.conf
+    .getOption("spark.repl.class.outputDir")
+    .map(p => Paths.get(p))
+    .getOrElse(artifactRootPath.resolve("classes"))
+
+  private[connect] lazy val classArtifactUri: String =
+    SparkEnv.get.conf.getOption("spark.repl.class.uri") match {
+      case Some(uri) => uri
+      case None =>
+        throw new RuntimeException("Class artifact URI had not been initialised in SparkContext!")
     }
-  }
 
   private val jarsList = new CopyOnWriteArrayList[Path]
 
