@@ -95,47 +95,101 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
       .toSeq
   }
 
+  private def addSingleChunkArtifact(
+    handler: SparkConnectAddArtifactsHandler,
+    name: String,
+    artifactPath: Path): Unit = {
+    val dataChunks = getDataChunks(artifactPath)
+    assert(dataChunks.size == 1)
+    val bytes = dataChunks.head
+    val context = proto.UserContext
+      .newBuilder()
+      .setUserId("c1")
+      .build()
+    val fileNameNoExtension = artifactPath.getFileName.toString.split('.').head
+    val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact.newBuilder()
+      .setName(name)
+      .setData(proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
+        .setData(bytes)
+        .setCrc(getCrcValues(crcPath.resolve(fileNameNoExtension + ".txt")).head)
+        .build()
+      )
+      .build()
+
+    val singleChunkArtifactRequest = AddArtifactsRequest.newBuilder()
+      .setSessionId("abc")
+      .setUserContext(context)
+      .setBatch(
+        proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build()
+      )
+      .build()
+
+    handler.onNext(singleChunkArtifactRequest)
+  }
+
+  private def addSingleChunkArtifacts(
+      handler: SparkConnectAddArtifactsHandler,
+      names: Seq[String],
+      artifactPaths: Seq[Path]): Unit = {
+    names.zip(artifactPaths).foreach { case (name, path) =>
+      addSingleChunkArtifact(handler, name, path)
+    }
+  }
+
+  private def addChunkedArtifact(
+      handler: SparkConnectAddArtifactsHandler,
+      name: String,
+      artifactPath: Path): Unit = {
+    val dataChunks = getDataChunks(artifactPath)
+    val crcs = getCrcValues(artifactPath)
+    assert(dataChunks.size == crcs.size)
+    val artifactChunks = dataChunks.zip(crcs).map { case (chunk, crc) =>
+      proto.AddArtifactsRequest.ArtifactChunk.newBuilder().setData(chunk).setCrc(crc).build()
+    }
+
+    val context = proto.UserContext
+      .newBuilder()
+      .setUserId("c1")
+      .build()
+    val beginChunkedArtifact = proto.AddArtifactsRequest.BeginChunkedArtifact.newBuilder()
+      .setName(name)
+      .setNumChunks(artifactChunks.size)
+      .setTotalBytes(Files.size(artifactPath))
+      .setInitialChunk(artifactChunks.head)
+      .build()
+
+    val requestBuilder = AddArtifactsRequest.newBuilder()
+      .setSessionId("abc")
+      .setUserContext(context)
+      .setBeginChunk(beginChunkedArtifact)
+
+    handler.onNext(requestBuilder.build())
+    requestBuilder.clearBeginChunk()
+    artifactChunks.drop(1).foreach { dataChunk =>
+      requestBuilder.setChunk(dataChunk)
+      handler.onNext(requestBuilder.build())
+    }
+  }
 
   test("single chunk artifact") {
     val promise = Promise[AddArtifactsResponse]
     val handler = new TestAddArtifactsHandler(new DummyStreamObserver(promise))
     try {
-      val dataChunks = getDataChunks(inputFilePath.resolve("smallClassFile.class"))
-      assert(dataChunks.size == 1)
-      val bytes = dataChunks.head
-      val context = proto.UserContext
-        .newBuilder()
-        .setUserId("c1")
-        .build()
-      val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact.newBuilder()
-        .setName("classes/smallClassFile.class")
-        .setData(proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
-          .setData(bytes)
-          .setCrc(getCrcValues(crcPath.resolve("smallClassFile.txt")).head)
-          .build()
-        )
-        .build()
-
-      val singleChunkArtifactRequest = AddArtifactsRequest.newBuilder()
-        .setSessionId("abc")
-        .setUserContext(context)
-        .setBatch(
-          proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build()
-        )
-        .build()
-
-      handler.onNext(singleChunkArtifactRequest)
+      val name = "classes/smallClassFile.class"
+      val artifactPath = inputFilePath.resolve("smallClassFile.class")
+      addSingleChunkArtifact(handler, name, artifactPath)
       handler.onCompleted()
       val response = ThreadUtils.awaitResult(promise.future, 5.seconds)
       val summaries = response.getArtifactsList.asScala.toSeq
       assert(summaries.size == 1)
-      assert(summaries.head.getName == "classes/smallClassFile.class")
+      assert(summaries.head.getName == name)
       assert(summaries.head.getIsCrcSuccessful)
 
-      val writtenFile = handler.stagingDirectory.resolve("classes/smallClassFile.class")
+      val writtenFile = handler.stagingDirectory.resolve(name)
       assert(writtenFile.toFile.exists())
       val writtenBytes = ByteString.readFrom(Files.newInputStream(writtenFile))
-      assert(writtenBytes == bytes)
+      val expectedBytes = ByteString.readFrom(Files.newInputStream(artifactPath))
+      assert(writtenBytes == expectedBytes)
     } finally {
       handler.forceCleanUp()
     }
@@ -145,48 +199,62 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
     val promise = Promise[AddArtifactsResponse]
     val handler = new TestAddArtifactsHandler(new DummyStreamObserver(promise))
     try {
+      val name = "jars/junitLargeJar.jar"
       val artifactPath = inputFilePath.resolve("junitLargeJar.jar")
-      val dataChunks = getDataChunks(artifactPath)
-      val crcs = getCrcValues(artifactPath)
-      assert(dataChunks.size == crcs.size)
-      val artifactChunks = dataChunks.zip(crcs).map { case (chunk, crc) =>
-        proto.AddArtifactsRequest.ArtifactChunk.newBuilder().setData(chunk).setCrc(crc).build()
-      }
-
-      val context = proto.UserContext
-        .newBuilder()
-        .setUserId("c1")
-        .build()
-      val beginChunkedArtifact = proto.AddArtifactsRequest.BeginChunkedArtifact.newBuilder()
-        .setName("jars/junitLargeJar.jar")
-        .setNumChunks(artifactChunks.size)
-        .setTotalBytes(Files.size(artifactPath))
-        .setInitialChunk(artifactChunks.head)
-        .build()
-
-      val requestBuilder = AddArtifactsRequest.newBuilder()
-        .setSessionId("abc")
-        .setUserContext(context)
-        .setBeginChunk(beginChunkedArtifact)
-
-      handler.onNext(requestBuilder.build())
-      requestBuilder.clearBeginChunk()
-      artifactChunks.drop(1).foreach { dataChunk =>
-        requestBuilder.setChunk(dataChunk)
-        handler.onNext(requestBuilder.build())
-      }
+      addChunkedArtifact(handler, name, artifactPath)
       handler.onCompleted()
       val response = ThreadUtils.awaitResult(promise.future, 5.seconds)
       val summaries = response.getArtifactsList.asScala.toSeq
       assert(summaries.size == 1)
-      assert(summaries.head.getName == "jars/junitLargeJar.jar")
+      assert(summaries.head.getName == name)
       assert(summaries.head.getIsCrcSuccessful)
 
-      val writtenFile = handler.stagingDirectory.resolve("jars/junitLargeJar.jar")
+      val writtenFile = handler.stagingDirectory.resolve(name)
       assert(writtenFile.toFile.exists())
       val writtenBytes = ByteString.readFrom(Files.newInputStream(writtenFile))
       val expectedByes = ByteString.readFrom(Files.newInputStream(artifactPath))
       assert(writtenBytes == expectedByes)
+    } finally {
+      handler.forceCleanUp()
+    }
+  }
+
+  test("Mix of single-chunk and chunked artifacts") {
+    val promise = Promise[AddArtifactsResponse]
+    val handler = new TestAddArtifactsHandler(new DummyStreamObserver(promise))
+    try {
+      val names = Seq(
+        "classes/smallClassFile.class",
+        "jars/junitLargeJar.jar",
+        "classes/smallClassFileDup.class",
+        "jars/smallJar.jar")
+
+      val artifactPaths = Seq(
+        inputFilePath.resolve("smallClassFile.class"),
+        inputFilePath.resolve("junitLargeJar.jar"),
+        inputFilePath.resolve("smallClassFileDup.class"),
+        inputFilePath.resolve("smallJar.jar")
+      )
+
+      addSingleChunkArtifact(handler, names.head, artifactPaths.head)
+      addChunkedArtifact(handler, names(1), artifactPaths(1))
+      addSingleChunkArtifacts(handler, names.drop(2), artifactPaths.drop(2))
+      handler.onCompleted()
+      val response = ThreadUtils.awaitResult(promise.future, 5.seconds)
+      val summaries = response.getArtifactsList.asScala.toSeq
+      assert(summaries.size == 4)
+      summaries.zip(names).foreach { case (summary, name) =>
+        assert(summary.getName == name)
+        assert(summary.getIsCrcSuccessful)
+      }
+
+      val writtenFiles = names.map(name => handler.stagingDirectory.resolve(name))
+      writtenFiles.zip(artifactPaths).foreach { case(writtenFile, artifactPath) =>
+        assert(writtenFile.toFile.exists())
+        val writtenBytes = ByteString.readFrom(Files.newInputStream(writtenFile))
+        val expectedByes = ByteString.readFrom(Files.newInputStream(artifactPath))
+        assert(writtenBytes == expectedByes)
+      }
     } finally {
       handler.forceCleanUp()
     }
