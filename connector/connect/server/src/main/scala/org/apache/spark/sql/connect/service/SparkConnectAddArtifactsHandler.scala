@@ -87,7 +87,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
         addStagedArtifactToArtifactManager(artifact)
       }
       artifact.summary()
-    }
+    }.toSeq
   }
 
   protected def cleanUpStagedArtifacts(): Unit = Utils.deleteRecursively(stagingDir.toFile)
