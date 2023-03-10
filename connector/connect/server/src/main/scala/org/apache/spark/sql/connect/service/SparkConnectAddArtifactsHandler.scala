@@ -32,11 +32,13 @@ import org.apache.spark.util.Utils
 class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddArtifactsResponse])
     extends StreamObserver[AddArtifactsRequest] {
 
-  private val stagingDir = Utils.createTempDir().toPath
-  private val stagedArtifacts = mutable.Buffer.empty[StagedArtifact]
+  protected val stagingDir: Path = Utils.createTempDir().toPath
+  protected val stagedArtifacts: mutable.Buffer[StagedArtifact] =
+    mutable.Buffer.empty[StagedArtifact]
   private var chunkedArtifact: StagedChunkedArtifact = _
   private var holder: SessionHolder = _
-  private lazy val artifactManager = SparkConnectArtifactManager.getOrCreateArtifactManager
+  private def artifactManager: SparkConnectArtifactManager =
+    SparkConnectArtifactManager.getOrCreateArtifactManager
 
   override def onNext(req: AddArtifactsRequest): Unit = {
     if (this.holder == null) {
@@ -75,19 +77,25 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     responseObserver.onError(throwable)
   }
 
-  override def onCompleted(): Unit = {
-    // Add the artifacts to the session.
-    val builder = proto.AddArtifactsResponse.newBuilder()
-    stagedArtifacts.foreach { artifact =>
+  protected def flushStagedArtifacts(): Seq[ArtifactSummary] = {
+    stagedArtifacts.map { artifact =>
       artifactManager.addArtifact(
         holder.session,
         artifact.path,
         artifact.stagedPath)
-      builder.addArtifacts(artifact.summary())
+      artifact.summary()
     }
+  }
 
+  protected def cleanUpStagedArtifacts(): Unit = Utils.deleteRecursively(stagingDir.toFile)
+
+  override def onCompleted(): Unit = {
+    // Add the artifacts to the session.
+    val builder = proto.AddArtifactsResponse.newBuilder()
+    val artifactSummaries = flushStagedArtifacts()
+    artifactSummaries.foreach(summary => builder.addArtifacts(summary))
     // Delete temp dir
-    Utils.deleteRecursively(stagingDir.toFile)
+   cleanUpStagedArtifacts()
 
     // Send the summaries and close
     responseObserver.onNext(builder.build())
@@ -147,6 +155,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
           throw e
       }
       updateCrc(checksumOut.getChecksum.getValue == dataChunk.getCrc)
+      checksumOut.getChecksum.reset()
     }
 
     def close(): Unit = {
@@ -170,13 +179,15 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
 
     private var remainingChunks = numChunks
     private var totalBytesProcessed = 0L
+    private var isFirstCrcUpdate = true
 
     def getRemainingChunks: Long = remainingChunks
 
     def isFinished: Boolean = remainingChunks == 0
 
     override protected def updateCrc(isSuccess: Boolean): Unit = {
-      isCrcSuccess = isCrcSuccess && isSuccess
+      isCrcSuccess = isSuccess && (isCrcSuccess || isFirstCrcUpdate)
+      isFirstCrcUpdate = false
     }
 
     override def write(dataChunk: proto.AddArtifactsRequest.ArtifactChunk): Unit = {

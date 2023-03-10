@@ -27,7 +27,7 @@ import org.apache.spark.SparkEnv
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.Utils
 
-class SparkConnectArtifactManager private {
+class SparkConnectArtifactManager private[connect] {
 
   private[connect] val artifactRootPath = Utils.createTempDir("artifacts").toPath
   private[connect] val artifactRootURI = {
