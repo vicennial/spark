@@ -27,8 +27,22 @@ import org.apache.spark.{SparkContext, SparkEnv}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.Utils
 
+/**
+ * The Artifact Manager for the [[SparkConnectService]].
+ *
+ * This class handles the storage of artifacts as well as preparing the artifacts for use.
+ * Currently, jars and classfile artifacts undergo additional processing:
+ *   - Jars are automatically added to the underlying [[SparkContext]] and are accessible by all
+ *     users of the cluster.
+ *   - Class files are moved into a common directory that is shared among all users of the
+ *     cluster. Note: Under a multi-user setup, class file conflicts may occur between user
+ *     classes as the class file directory is shared.
+ */
 class SparkConnectArtifactManager private[connect] {
 
+  // The base directory where all artifacts are stored/
+  // Note: If a REPL is attached to the cluster, class file artifacts are stored in the
+  // REPL's output directory.
   private[connect] lazy val artifactRootPath = SparkContext.getActive match {
     case Some(sc) =>
       sc.sparkConnectArtifactDirectory.toPath
@@ -40,6 +54,9 @@ class SparkConnectArtifactManager private[connect] {
     fileServer.addDirectory("artifacts", artifactRootPath.toFile)
   }
 
+  // The base directory where all class files are stored.
+  // Note: If a REPL is attached to the cluster, we piggyback on the existing REPL output
+  // directory to store class file artifacts.
   private[connect] lazy val classArtifactDir = SparkEnv.get.conf
     .getOption("spark.repl.class.outputDir")
     .map(p => Paths.get(p))
@@ -54,9 +71,22 @@ class SparkConnectArtifactManager private[connect] {
 
   private val jarsList = new CopyOnWriteArrayList[Path]
 
+  /**
+   * Get the URLs of all jar artifacts added through the [[SparkConnectService]].
+   *
+   * @return
+   */
   def getSparkConnectAddedJars: Seq[URL] = jarsList.asScala.map(_.toUri.toURL).toSeq
 
-  def addArtifact(
+  /**
+   * Add and prepare a staged artifact (i.e an artifact that has been rebuilt locally from bytes
+   * over the wire) for use.
+   *
+   * @param session
+   * @param remoteRelativePath
+   * @param serverLocalStagingPath
+   */
+  private[connect] def addArtifact(
       session: SparkSession,
       remoteRelativePath: Path,
       serverLocalStagingPath: Path): Unit = {
@@ -82,6 +112,12 @@ class SparkConnectArtifactManager private[connect] {
 object SparkConnectArtifactManager {
 
   private var _activeArtifactManager: SparkConnectArtifactManager = _
+
+  /**
+   * Obtain the active artifact manager or create a new artifact manager.
+   *
+   * @return
+   */
   def getOrCreateArtifactManager: SparkConnectArtifactManager = {
     if (_activeArtifactManager == null) {
       _activeArtifactManager = new SparkConnectArtifactManager
@@ -91,12 +127,25 @@ object SparkConnectArtifactManager {
 
   private lazy val artifactManager = getOrCreateArtifactManager
 
+  /**
+   * Obtain a classloader that contains jar and classfile artifacts on the classpath.
+   *
+   * @return
+   */
   def classLoaderWithArtifacts: ClassLoader = {
     val urls = artifactManager.getSparkConnectAddedJars :+
       artifactManager.classArtifactDir.toUri.toURL
     new URLClassLoader(urls.toArray, Utils.getContextOrSparkClassLoader)
   }
 
+  /**
+   * Run a segment of code utilising a classloader that contains jar and classfile artifacts on
+   * the classpath.
+   *
+   * @param thunk
+   * @tparam T
+   * @return
+   */
   def withArtifactClassLoader[T](thunk: => T): T = {
     Utils.withContextClassLoader(classLoaderWithArtifacts) {
       thunk

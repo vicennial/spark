@@ -29,12 +29,20 @@ import org.apache.spark.connect.proto.AddArtifactsResponse.ArtifactSummary
 import org.apache.spark.sql.connect.artifact.SparkConnectArtifactManager
 import org.apache.spark.util.Utils
 
+/**
+ * Handles [[AddArtifactsRequest]]s for the [[SparkConnectService]].
+ *
+ * @param responseObserver
+ */
 class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddArtifactsResponse])
     extends StreamObserver[AddArtifactsRequest] {
 
+  // Temporary directory where artifacts are rebuilt from the bytes sent over the wire.
   protected val stagingDir: Path = Utils.createTempDir().toPath
   protected val stagedArtifacts: mutable.Buffer[StagedArtifact] =
     mutable.Buffer.empty[StagedArtifact]
+  // If not null, indicates the currently active chunked artifact that is being rebuilt from
+  // several [[AddArtifactsRequest]]s.
   private var chunkedArtifact: StagedChunkedArtifact = _
   private var holder: SessionHolder = _
   private def artifactManager: SparkConnectArtifactManager =
@@ -49,6 +57,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     }
 
     if (req.hasBeginChunk) {
+      // The beginning of a multi-chunk artifact.
       require(chunkedArtifact == null)
       chunkedArtifact = writeDepToFile(req.getBeginChunk)
     } else if (req.hasChunk) {
@@ -58,10 +67,12 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
 
       if (chunkedArtifact.isFinished) {
         chunkedArtifact.close()
+        // Unset the currently active chunked artifact.
         chunkedArtifact = null
       }
     } else if (req.hasBatch) {
       req.getBatch.getArtifactsList.forEach { artifact =>
+        // Each artifact in the batch is single-chunked.
         val out = writeDepToFile(artifact)
         out.close()
       }
@@ -81,8 +92,15 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     artifactManager.addArtifact(holder.session, artifact.path, artifact.stagedPath)
   }
 
+  /**
+   * Process all the staged artifacts built in this stream.
+   *
+   * @return
+   */
   protected def flushStagedArtifacts(): Seq[ArtifactSummary] = {
     stagedArtifacts.map { artifact =>
+      // We do not store artifacts that fail the CRC. The failure is reported in the artifact
+      // summary and it is up to the client to decide whether to retry sending the artifact.
       if (artifact.getCrcStatus.contains(true)) {
         addStagedArtifactToArtifactManager(artifact)
       }
@@ -93,9 +111,9 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
   protected def cleanUpStagedArtifacts(): Unit = Utils.deleteRecursively(stagingDir.toFile)
 
   override def onCompleted(): Unit = {
+    val artifactSummaries = flushStagedArtifacts()
     // Add the artifacts to the session.
     val builder = proto.AddArtifactsResponse.newBuilder()
-    val artifactSummaries = flushStagedArtifacts()
     artifactSummaries.foreach(summary => builder.addArtifacts(summary))
     // Delete temp dir
     cleanUpStagedArtifacts()
@@ -106,8 +124,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
   }
 
   /**
-   * Create a (temp) file for the dependency and write the initial chunk. This returns the open
-   * [[OutputStream]] so further chunks can be appended to the file.
+   * Create a (temporary) file for a single-chunk artifact.
    */
   private def writeDepToFile(
       artifact: proto.AddArtifactsRequest.SingleChunkArtifact): StagedArtifact = {
@@ -118,8 +135,8 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
   }
 
   /**
-   * Create a (temp) file for the dependency and write the initial chunk. This returns the open
-   * [[OutputStream]] so further chunks can be appended to the file.
+   * Create a (temporary) file for the multi-chunk artifact and write the initial chunk. Further
+   * chunks can be appended to the file.
    */
   private def writeDepToFile(
       artifact: proto.AddArtifactsRequest.BeginChunkedArtifact): StagedChunkedArtifact = {
@@ -130,6 +147,9 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     stagedChunkedArtifact
   }
 
+  /**
+   * Handles rebuilding an artifact from bytes sent over the wire.
+   */
   class StagedArtifact(val name: String) {
     val path: Path = Paths.get(name)
     val stagedPath: Path = stagingDir.resolve(path)
@@ -177,6 +197,13 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     }
   }
 
+  /**
+   * Extends [[StagedArtifact]] to handle multi-chunk artifacts.
+   *
+   * @param name
+   * @param numChunks
+   * @param totalBytes
+   */
   class StagedChunkedArtifact(name: String, numChunks: Long, totalBytes: Long)
       extends StagedArtifact(name) {
 
@@ -189,6 +216,7 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     def isFinished: Boolean = remainingChunks == 0
 
     override protected def updateCrc(isSuccess: Boolean): Unit = {
+      // The overall artifact CRC is a success if and only if all the individual chunk CRCs match.
       isCrcSuccess = isSuccess && (isCrcSuccess || isFirstCrcUpdate)
       isFirstCrcUpdate = false
     }

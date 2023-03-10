@@ -46,10 +46,12 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
   class TestAddArtifactsHandler(responseObserver: StreamObserver[AddArtifactsResponse])
       extends SparkConnectAddArtifactsHandler(responseObserver) {
 
+    // Stop the staged artifacts from being automatically deleted
     override protected def cleanUpStagedArtifacts(): Unit = {}
 
     private val finalArtifacts = mutable.Buffer.empty[String]
 
+    // Record the artifacts that are sent out for final processing.
     override protected def addStagedArtifactToArtifactManager(artifact: StagedArtifact): Unit = {
       finalArtifacts.append(artifact.name)
     }
@@ -285,6 +287,7 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
           proto.AddArtifactsRequest.ArtifactChunk
             .newBuilder()
             .setData(bytes)
+            // Set a dummy CRC value
             .setCrc(12345)
             .build())
         .build()
