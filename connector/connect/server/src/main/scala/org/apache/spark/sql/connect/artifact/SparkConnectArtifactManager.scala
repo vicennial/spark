@@ -36,7 +36,9 @@ class SparkConnectArtifactManager private[connect] {
   }
 
   private[connect] val classArtifactDir = {
-    val dir = SparkEnv.get.conf.getOption("spark.repl.class.outputDir").map(p => Paths.get(p))
+    val dir = SparkEnv.get.conf
+      .getOption("spark.repl.class.outputDir")
+      .map(p => Paths.get(p))
       .getOrElse(artifactRootPath.resolve("classes"))
     Files.createDirectories(dir)
     dir
@@ -53,7 +55,7 @@ class SparkConnectArtifactManager private[connect] {
 
   private val jarsList = new CopyOnWriteArrayList[Path]
 
-  def getSparkConnectAddedJars: Seq[URL] = jarsList.asScala.map(_.toUri.toURL)
+  def getSparkConnectAddedJars: Seq[URL] = jarsList.asScala.map(_.toUri.toURL).toSeq
 
   def addArtifact(
       session: SparkSession,

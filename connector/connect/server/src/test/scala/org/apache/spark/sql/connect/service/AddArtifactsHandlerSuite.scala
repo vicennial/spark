@@ -32,7 +32,6 @@ import org.apache.spark.sql.connect.ResourceHelper
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.util.ThreadUtils
 
-
 class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
 
   private val CHUNK_SIZE: Int = 32 * 1024
@@ -81,7 +80,7 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
     val in = Files.newInputStream(filePath)
     var chunkData: ByteString = readNextChunk(in)
     val dataChunks = mutable.ListBuffer.empty[ByteString]
-    while(chunkData != ByteString.empty()) {
+    while (chunkData != ByteString.empty()) {
       dataChunks.append(chunkData)
       chunkData = readNextChunk(in)
     }
@@ -99,9 +98,9 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
   }
 
   private def addSingleChunkArtifact(
-    handler: SparkConnectAddArtifactsHandler,
-    name: String,
-    artifactPath: Path): Unit = {
+      handler: SparkConnectAddArtifactsHandler,
+      name: String,
+      artifactPath: Path): Unit = {
     val dataChunks = getDataChunks(artifactPath)
     assert(dataChunks.size == 1)
     val bytes = dataChunks.head
@@ -110,21 +109,23 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
       .setUserId("c1")
       .build()
     val fileNameNoExtension = artifactPath.getFileName.toString.split('.').head
-    val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact.newBuilder()
+    val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact
+      .newBuilder()
       .setName(name)
-      .setData(proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
-        .setData(bytes)
-        .setCrc(getCrcValues(crcPath.resolve(fileNameNoExtension + ".txt")).head)
-        .build()
-      )
+      .setData(
+        proto.AddArtifactsRequest.ArtifactChunk
+          .newBuilder()
+          .setData(bytes)
+          .setCrc(getCrcValues(crcPath.resolve(fileNameNoExtension + ".txt")).head)
+          .build())
       .build()
 
-    val singleChunkArtifactRequest = AddArtifactsRequest.newBuilder()
+    val singleChunkArtifactRequest = AddArtifactsRequest
+      .newBuilder()
       .setSessionId("abc")
       .setUserContext(context)
       .setBatch(
-        proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build()
-      )
+        proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build())
       .build()
 
     handler.onNext(singleChunkArtifactRequest)
@@ -154,14 +155,16 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
       .newBuilder()
       .setUserId("c1")
       .build()
-    val beginChunkedArtifact = proto.AddArtifactsRequest.BeginChunkedArtifact.newBuilder()
+    val beginChunkedArtifact = proto.AddArtifactsRequest.BeginChunkedArtifact
+      .newBuilder()
       .setName(name)
       .setNumChunks(artifactChunks.size)
       .setTotalBytes(Files.size(artifactPath))
       .setInitialChunk(artifactChunks.head)
       .build()
 
-    val requestBuilder = AddArtifactsRequest.newBuilder()
+    val requestBuilder = AddArtifactsRequest
+      .newBuilder()
       .setSessionId("abc")
       .setUserContext(context)
       .setBeginChunk(beginChunkedArtifact)
@@ -236,8 +239,7 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
         inputFilePath.resolve("smallClassFile.class"),
         inputFilePath.resolve("junitLargeJar.jar"),
         inputFilePath.resolve("smallClassFileDup.class"),
-        inputFilePath.resolve("smallJar.jar")
-      )
+        inputFilePath.resolve("smallJar.jar"))
 
       addSingleChunkArtifact(handler, names.head, artifactPaths.head)
       addChunkedArtifact(handler, names(1), artifactPaths(1))
@@ -252,7 +254,7 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
       }
 
       val writtenFiles = names.map(name => handler.stagingDirectory.resolve(name))
-      writtenFiles.zip(artifactPaths).foreach { case(writtenFile, artifactPath) =>
+      writtenFiles.zip(artifactPaths).foreach { case (writtenFile, artifactPath) =>
         assert(writtenFile.toFile.exists())
         val writtenBytes = ByteString.readFrom(Files.newInputStream(writtenFile))
         val expectedByes = ByteString.readFrom(Files.newInputStream(artifactPath))
@@ -276,21 +278,23 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
         .newBuilder()
         .setUserId("c1")
         .build()
-      val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact.newBuilder()
+      val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact
+        .newBuilder()
         .setName(name)
-        .setData(proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
-          .setData(bytes)
-          .setCrc(12345)
-          .build()
-        )
+        .setData(
+          proto.AddArtifactsRequest.ArtifactChunk
+            .newBuilder()
+            .setData(bytes)
+            .setCrc(12345)
+            .build())
         .build()
 
-      val singleChunkArtifactRequest = AddArtifactsRequest.newBuilder()
+      val singleChunkArtifactRequest = AddArtifactsRequest
+        .newBuilder()
         .setSessionId("abc")
         .setUserContext(context)
         .setBatch(
-          proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build()
-        )
+          proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build())
         .build()
 
       handler.onNext(singleChunkArtifactRequest)
