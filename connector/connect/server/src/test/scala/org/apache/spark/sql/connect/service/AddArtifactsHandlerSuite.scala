@@ -49,10 +49,13 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
 
     override protected def cleanUpStagedArtifacts(): Unit = {}
 
-    override protected def flushStagedArtifacts(): Seq[AddArtifactsResponse.ArtifactSummary] = {
-      stagedArtifacts.map(_.summary())
+    private val finalArtifacts = mutable.Buffer.empty[String]
+
+    override protected def addStagedArtifactToArtifactManager(artifact: StagedArtifact): Unit = {
+      finalArtifacts.append(artifact.name)
     }
 
+    def getFinalArtifacts: Seq[String] = finalArtifacts.toSeq
     def stagingDirectory: Path = this.stagingDir
     def forceCleanUp(): Unit = super.cleanUpStagedArtifacts()
   }
@@ -255,6 +258,50 @@ class AddArtifactsHandlerSuite extends SharedSparkSession with ResourceHelper {
         val expectedByes = ByteString.readFrom(Files.newInputStream(artifactPath))
         assert(writtenBytes == expectedByes)
       }
+    } finally {
+      handler.forceCleanUp()
+    }
+  }
+
+  test("Artifacts that fail CRC are not added to the artifact manager") {
+    val promise = Promise[AddArtifactsResponse]
+    val handler = new TestAddArtifactsHandler(new DummyStreamObserver(promise))
+    try {
+      val name = "classes/smallClassFile.class"
+      val artifactPath = inputFilePath.resolve("smallClassFile.class")
+      val dataChunks = getDataChunks(artifactPath)
+      assert(dataChunks.size == 1)
+      val bytes = dataChunks.head
+      val context = proto.UserContext
+        .newBuilder()
+        .setUserId("c1")
+        .build()
+      val singleChunkArtifact = proto.AddArtifactsRequest.SingleChunkArtifact.newBuilder()
+        .setName(name)
+        .setData(proto.AddArtifactsRequest.ArtifactChunk.newBuilder()
+          .setData(bytes)
+          .setCrc(12345)
+          .build()
+        )
+        .build()
+
+      val singleChunkArtifactRequest = AddArtifactsRequest.newBuilder()
+        .setSessionId("abc")
+        .setUserContext(context)
+        .setBatch(
+          proto.AddArtifactsRequest.Batch.newBuilder().addArtifacts(singleChunkArtifact).build()
+        )
+        .build()
+
+      handler.onNext(singleChunkArtifactRequest)
+      handler.onCompleted()
+      val response = ThreadUtils.awaitResult(promise.future, 5.seconds)
+      val summaries = response.getArtifactsList.asScala.toSeq
+      assert(summaries.size == 1)
+      assert(summaries.head.getName == name)
+      assert(!summaries.head.getIsCrcSuccessful)
+
+      assert(handler.getFinalArtifacts.isEmpty)
     } finally {
       handler.forceCleanUp()
     }

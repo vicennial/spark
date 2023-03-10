@@ -77,12 +77,18 @@ class SparkConnectAddArtifactsHandler(val responseObserver: StreamObserver[AddAr
     responseObserver.onError(throwable)
   }
 
+  protected def addStagedArtifactToArtifactManager(artifact: StagedArtifact): Unit = {
+    artifactManager.addArtifact(
+      holder.session,
+      artifact.path,
+      artifact.stagedPath)
+  }
+
   protected def flushStagedArtifacts(): Seq[ArtifactSummary] = {
     stagedArtifacts.map { artifact =>
-      artifactManager.addArtifact(
-        holder.session,
-        artifact.path,
-        artifact.stagedPath)
+      if (artifact.getCrcStatus.contains(true)) {
+        addStagedArtifactToArtifactManager(artifact)
+      }
       artifact.summary()
     }
   }
