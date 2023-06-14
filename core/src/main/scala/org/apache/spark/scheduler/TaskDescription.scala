@@ -151,8 +151,8 @@ private[spark] object TaskDescription {
     serializeOptionString(artifacts.uuid, dataOut)
     serializeOptionString(artifacts.replClassDirUri, dataOut)
     serializeStringLongMap(Map(artifacts.jars.toSeq: _*), dataOut)
-    serializeStringLongMap(Map(artifacts.jars.toSeq: _*), dataOut)
-    serializeStringLongMap(Map(artifacts.jars.toSeq: _*), dataOut)
+    serializeStringLongMap(Map(artifacts.files.toSeq: _*), dataOut)
+    serializeStringLongMap(Map(artifacts.archives.toSeq: _*), dataOut)
   }
 
   private def deserializeStringLongMap(dataIn: DataInputStream): HashMap[String, Long] = {

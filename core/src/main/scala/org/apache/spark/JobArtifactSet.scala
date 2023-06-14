@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import java.io.Serializable
+
 /**
  * Artifact set for a job.
  * This class is used to store session (i.e [[SparkSession]]) specific resources/artifacts.
@@ -29,8 +31,22 @@ class JobArtifactSet(
   val replClassDirUri: Option[String],
   val jars: Map[String, Long],
   val files: Map[String, Long],
-  val archives: Map[String, Long]) {
+  val archives: Map[String, Long]) extends Serializable {
   def withActive[T](f: => T): T = JobArtifactSet.withActive(this)(f)
+
+  override def hashCode(): Int = {
+    Seq(uuid, replClassDirUri, jars.toSeq, files.toSeq, archives.toSeq).hashCode()
+  }
+
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case that: JobArtifactSet =>
+        this.getClass == that.getClass && this.uuid == that.uuid &&
+          this.replClassDirUri == that.replClassDirUri && this.jars.toSeq == that.jars.toSeq &&
+          this.files.toSeq == that.files.toSeq && this.archives.toSeq == that.archives.toSeq
+    }
+  }
+
 }
 
 object JobArtifactSet {
@@ -49,6 +65,22 @@ object JobArtifactSet {
       jars = sc.addedJars.toMap,
       files = sc.addedFiles.toMap,
       archives = sc.addedArchives.toMap)
+  }
+
+  /**
+   * Empty artifact set for use in tests.
+   */
+  private[spark] def apply(): JobArtifactSet = {
+    new JobArtifactSet(
+      None,
+      None,
+      Map.empty,
+      Map.empty,
+      Map.empty)
+  }
+
+  private[spark] def defaultArtifactSet(): JobArtifactSet = {
+    SparkContext.getActive.map(sc => JobArtifactSet(sc)).getOrElse(JobArtifactSet())
   }
 
   /**
