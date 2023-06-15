@@ -27,11 +27,11 @@ import java.io.Serializable
  * Note that Spark Connect is not a requirement for using this class.
  */
 class JobArtifactSet(
-  val uuid: Option[String],
-  val replClassDirUri: Option[String],
-  val jars: Map[String, Long],
-  val files: Map[String, Long],
-  val archives: Map[String, Long]) extends Serializable {
+    val uuid: Option[String],
+    val replClassDirUri: Option[String],
+    val jars: Map[String, Long],
+    val files: Map[String, Long],
+    val archives: Map[String, Long]) extends Serializable {
   def withActive[T](f: => T): T = JobArtifactSet.withActive(this)(f)
 
   override def hashCode(): Int = {
@@ -79,6 +79,10 @@ object JobArtifactSet {
       Map.empty)
   }
 
+  /**
+   * Used for testing. Returns artifacts from [[SparkContext]] if one exists or otherwise, an
+   * empty set.
+   */
   private[spark] def defaultArtifactSet(): JobArtifactSet = {
     SparkContext.getActive.map(sc => JobArtifactSet(sc)).getOrElse(JobArtifactSet())
   }
