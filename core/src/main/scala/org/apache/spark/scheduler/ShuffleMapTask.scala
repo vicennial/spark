@@ -39,6 +39,7 @@ import org.apache.spark.rdd.RDD
  * @param partition partition of the RDD this task is associated with
  * @param numPartitions Total number of partitions in the stage that this task belongs to.
  * @param locs preferred task execution locations for locality scheduling
+ * @param artifacts list of artifacts (may be session-specific) of the job this task belongs to.
  * @param localProperties copy of thread-local properties set by the user on the driver side.
  * @param serializedTaskMetrics a `TaskMetrics` that is created and serialized on the driver side
  *                              and sent to executor side.

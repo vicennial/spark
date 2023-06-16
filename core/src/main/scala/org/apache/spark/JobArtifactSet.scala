@@ -25,6 +25,12 @@ import java.io.Serializable
  *
  * When Spark Connect is used, this job-set points towards session-specific jars and class files.
  * Note that Spark Connect is not a requirement for using this class.
+ *
+ * @param uuid An optional UUID for this session. If unset, a default session will be used.
+ * @param replClassDirUri An optional custom URI to point towards class files.
+ * @param jars Jars belonging to this session.
+ * @param files Files belonging to this session.
+ * @param archives Archives belonging to this session.
  */
 class JobArtifactSet(
     val uuid: Option[String],
@@ -57,6 +63,9 @@ object JobArtifactSet {
 
   /**
    * When Spark Connect isn't used, we default back to the shared resources.
+   * @param sc The active [[SparkContext]]
+   * @return A [[JobArtifactSet]] containing a copy of the jars/files/archives from the underlying
+   *         [[SparkContext]] `sc`.
    */
   def apply(sc: SparkContext): JobArtifactSet = {
     new JobArtifactSet(
