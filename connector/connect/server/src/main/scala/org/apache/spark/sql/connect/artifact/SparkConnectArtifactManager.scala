@@ -50,7 +50,8 @@ import org.apache.spark.util.Utils
  * while other types of artifacts are stored under the root directory for that particular
  * [[SparkSession]].
  *
- * @param sessionHolder The object used to hold the Spark Connect session state.
+ * @param sessionHolder
+ *   The object used to hold the Spark Connect session state.
  */
 class SparkConnectArtifactManager(sessionHolder: SessionHolder) extends Logging {
   import SparkConnectArtifactManager._
@@ -179,8 +180,9 @@ class SparkConnectArtifactManager(sessionHolder: SessionHolder) extends Logging 
    * Cleans up all resources specific to this `sessionHolder`.
    */
   private[connect] def cleanUpResources(): Unit = {
-    logDebug(s"Cleaning up resources for session with userId: ${sessionHolder.userId} and " +
-      s"sessionId: ${sessionHolder.sessionId}")
+    logDebug(
+      s"Cleaning up resources for session with userId: ${sessionHolder.userId} and " +
+        s"sessionId: ${sessionHolder.sessionId}")
     // Clean up cached relations
     val blockManager = sessionHolder.session.sparkContext.env.blockManager
     blockManager.removeCache(sessionHolder.userId, sessionHolder.sessionId)
@@ -238,7 +240,8 @@ object SparkConnectArtifactManager extends Logging {
   }
 
   private[spark] def getArtifactDirectoryAndUriForSession(session: SparkSession): (Path, String) =
-    (ArtifactUtils.concatenatePaths(artifactRootPath, session.sessionUUID),
+    (
+      ArtifactUtils.concatenatePaths(artifactRootPath, session.sessionUUID),
       s"$artifactRootURI/${session.sessionUUID}")
 
   private[spark] def getArtifactDirectoryAndUriForSession(
@@ -261,8 +264,8 @@ object SparkConnectArtifactManager extends Logging {
    * This is required if the SparkContext is restarted.
    *
    * Note: This logic is solely to handle testing where a [[SparkContext]] may be restarted
-   * several times in a single JVM lifetime. In a general Spark cluster, the [[SparkContext]] is not
-   * expected to be restarted at any point in time.
+   * several times in a single JVM lifetime. In a general Spark cluster, the [[SparkContext]] is
+   * not expected to be restarted at any point in time.
    */
   private def refreshArtifactUri(sc: SparkContext): Unit = synchronized {
     // If a competing thread had updated the URI, we do not need to refresh the URI again.
@@ -270,23 +273,19 @@ object SparkConnectArtifactManager extends Logging {
       return
     }
     val oldArtifactUri = currentArtifactRootUri
-    currentArtifactRootUri = SparkEnv
-      .get
-      .rpcEnv
-      .fileServer
+    currentArtifactRootUri = SparkEnv.get.rpcEnv.fileServer
       .addDirectoryIfAbsent(ARTIFACT_DIRECTORY_PREFIX, artifactRootPath.toFile)
     lastKnownSparkContextInstance = sc
     logDebug(s"Artifact URI updated from $oldArtifactUri to $currentArtifactRootUri")
   }
 
   /**
-   * Checks if the URI for the artifact directory needs to be updated.
-   * This is required in cases where SparkContext is restarted as the old URI would no longer be
-   * valid.
+   * Checks if the URI for the artifact directory needs to be updated. This is required in cases
+   * where SparkContext is restarted as the old URI would no longer be valid.
    *
    * Note: This logic is solely to handle testing where a [[SparkContext]] may be restarted
-   * several times in a single JVM lifetime. In a general Spark cluster, the [[SparkContext]] is not
-   * expected to be restarted at any point in time.
+   * several times in a single JVM lifetime. In a general Spark cluster, the [[SparkContext]] is
+   * not expected to be restarted at any point in time.
    */
   private def updateUriIfRequired(): Unit = {
     SparkContext.getActive.foreach { sc =>

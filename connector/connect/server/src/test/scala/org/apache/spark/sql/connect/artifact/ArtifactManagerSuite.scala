@@ -58,8 +58,7 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
     val remotePath = Paths.get("jars/smallJar.jar")
     artifactManager.addArtifact(remotePath, stagingPath, None)
 
-    val expectedPath = SparkConnectArtifactManager
-      .artifactRootPath
+    val expectedPath = SparkConnectArtifactManager.artifactRootPath
       .resolve(s"$sessionUUID/jars/smallJar.jar")
     assert(expectedPath.toFile.exists())
     val jars = artifactManager.jobArtifactSet.jars
@@ -74,9 +73,9 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
     assert(stagingPath.toFile.exists())
     artifactManager.addArtifact(remotePath, stagingPath, None)
 
-    val movedClassFile = SparkConnectArtifactManager
-      .artifactRootPath
-      .resolve(s"$sessionUUID/classes/smallClassFile.class").toFile
+    val movedClassFile = SparkConnectArtifactManager.artifactRootPath
+      .resolve(s"$sessionUUID/classes/smallClassFile.class")
+      .toFile
     assert(movedClassFile.exists())
   }
 
@@ -88,9 +87,9 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
     assert(stagingPath.toFile.exists())
     artifactManager.addArtifact(remotePath, stagingPath, None)
 
-    val movedClassFile = SparkConnectArtifactManager
-      .artifactRootPath
-      .resolve(s"$sessionUUID/classes/Hello.class").toFile
+    val movedClassFile = SparkConnectArtifactManager.artifactRootPath
+      .resolve(s"$sessionUUID/classes/Hello.class")
+      .toFile
     assert(movedClassFile.exists())
 
     val classLoader = artifactManager.classloader
@@ -114,9 +113,9 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
     val sessionHolder = SparkConnectService.getOrCreateIsolatedSession("c1", "session")
     sessionHolder.addArtifact(remotePath, stagingPath, None)
 
-    val movedClassFile = SparkConnectArtifactManager
-      .artifactRootPath
-      .resolve(s"${sessionHolder.session.sessionUUID}/classes/Hello.class").toFile
+    val movedClassFile = SparkConnectArtifactManager.artifactRootPath
+      .resolve(s"${sessionHolder.session.sessionUUID}/classes/Hello.class")
+      .toFile
     assert(movedClassFile.exists())
 
     val classLoader = sessionHolder.classloader
@@ -126,7 +125,6 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
       .newInstance("Talon")
       .asInstanceOf[String => String]
     val udf = org.apache.spark.sql.functions.udf(instance)
-
 
     sessionHolder.withSession { session =>
       session.range(10).select(udf(col("id").cast("string"))).collect()
@@ -200,8 +198,7 @@ class ArtifactManagerSuite extends SharedSparkSession with ResourceHelper {
         val bytes = blockManager.getLocalBytes(blockId)
         assert(bytes.isDefined)
         blockManager.releaseLock(blockId)
-        val expectedPath = SparkConnectArtifactManager
-          .artifactRootPath
+        val expectedPath = SparkConnectArtifactManager.artifactRootPath
           .resolve(s"$sessionUUID/classes/smallClassFile.class")
         assert(expectedPath.toFile.exists())
 

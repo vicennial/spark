@@ -92,8 +92,10 @@ class SparkConnectPlanner(val sessionHolder: SessionHolder) extends Logging {
   // SparkConnectPlanner is used per request.
   private lazy val pythonIncludes = {
     implicit val formats = DefaultFormats
-    parse(session.conf.get(
-      "spark.connect.pythonUDF.includes", "[]")).extract[Array[String]].toList.asJava
+    parse(session.conf.get("spark.connect.pythonUDF.includes", "[]"))
+      .extract[Array[String]]
+      .toList
+      .asJava
   }
 
   // The root of the query plan is a relation and we apply the transformations to it.
