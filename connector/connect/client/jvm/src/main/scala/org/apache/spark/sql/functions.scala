@@ -7666,7 +7666,8 @@ object functions {
    * @since 3.4.0
    */
   def udf[RT: TypeTag](f: () => RT): UserDefinedFunction = {
-    ScalarUserDefinedFunction(f, typeTag[RT])
+    val lambdaWrapper = () => f()
+    ScalarUserDefinedFunction(lambdaWrapper, typeTag[RT])
   }
 
   /**
