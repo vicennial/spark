@@ -135,12 +135,19 @@ class ArtifactManager(
     hash
   }
 
+  private def addBuildOutputClassFinderIfNeeded(): Unit = {
+    if (classFinders.isEmpty) {
+      classFinders.add(new BuildOutputClassfileMonitor())
+    }
+  }
+
   /**
-   * Upload all class file artifacts from the local REPL(s) to the server.
+   * Upload all class file artifacts from the local REPL/IDE to the server.
    *
    * The registered [[ClassFinder]]s are traversed to retrieve the class file artifacts.
    */
   private[client] def uploadAllClassFileArtifacts(): Unit = {
+    addBuildOutputClassFinderIfNeeded()
     addArtifacts(classFinders.asScala.flatMap(_.findClasses()))
   }
 

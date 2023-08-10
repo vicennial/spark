@@ -20,8 +20,6 @@ import java.io.{PipedInputStream, PipedOutputStream}
 import java.nio.file.Paths
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 
-import scala.util.Properties
-
 import org.apache.commons.io.output.ByteArrayOutputStream
 import org.apache.commons.lang3.{JavaVersion, SystemUtils}
 import org.scalatest.BeforeAndAfterEach
@@ -38,11 +36,6 @@ class ReplE2ESuite extends RemoteSparkSession with BeforeAndAfterEach {
   private var errorStream: ByteArrayOutputStream = _
   private var ammoniteIn: PipedInputStream = _
   private val semaphore: Semaphore = new Semaphore(0)
-
-  private val scalaVersion = Properties.versionNumberString
-    .split("\\.")
-    .take(2)
-    .mkString(".")
 
   private def getCleanString(out: ByteArrayOutputStream): String = {
     // Remove ANSI colour codes

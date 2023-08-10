@@ -16,9 +16,12 @@
  */
 package org.apache.spark.sql.connect.client.util
 
+import java.io.File
 import java.nio.file.Path
 
 import org.scalatest.funsuite.AnyFunSuite // scalastyle:ignore funsuite
+
+import org.apache.spark.util.Utils
 
 /**
  * The basic testsuite the client tests should extend from.
@@ -54,4 +57,21 @@ trait ConnectFunSuite extends AnyFunSuite { // scalastyle:ignore funsuite
       "test",
       "resources").toAbsolutePath
   }
+
+  /**
+   * Creates a temporary directory, which is then passed to `f` and will be deleted after `f`
+   * returns.
+   */
+  protected def withTempDir(f: File => Unit): Unit = {
+    val dir = Utils.createTempDir()
+    try f(dir)
+    finally {
+      Utils.deleteRecursively(dir)
+    }
+  }
+
+  protected val scalaVersion: String = scala.util.Properties.versionNumberString
+    .split("\\.")
+    .take(2)
+    .mkString(".")
 }
