@@ -18,25 +18,112 @@ package org.apache.spark.sql
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.file.Files
+import java.util.Properties
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
-import io.grpc.StatusRuntimeException
-import java.util.Properties
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.output.TeeOutputStream
 import org.apache.commons.lang3.{JavaVersion, SystemUtils}
 import org.scalactic.TolerantNumerics
+import org.scalatest.PrivateMethodTester
 
-import org.apache.spark.SPARK_VERSION
+import org.apache.spark.{SparkArithmeticException, SparkException}
+import org.apache.spark.SparkBuildInfo.{spark_version => SPARK_VERSION}
+import org.apache.spark.sql.catalyst.analysis.{NamespaceAlreadyExistsException, NoSuchDatabaseException, NoSuchTableException, TableAlreadyExistsException, TempTableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.StringEncoder
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.catalyst.parser.ParseException
+import org.apache.spark.sql.connect.client.{SparkConnectClient, SparkResult}
 import org.apache.spark.sql.connect.client.util.{IntegrationTestUtils, RemoteSparkSession}
-import org.apache.spark.sql.functions.{aggregate, array, broadcast, col, count, lit, rand, sequence, shuffle, struct, transform, udf}
+import org.apache.spark.sql.connect.client.util.SparkConnectServerUtils.port
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.internal.SqlApiConf
 import org.apache.spark.sql.types._
 
-class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
+class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper with PrivateMethodTester {
+
+  test("throw SparkArithmeticException") {
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      intercept[SparkArithmeticException] {
+        spark.sql("select 1/0").collect()
+      }
+    }
+  }
+
+  test("throw NoSuchDatabaseException") {
+    intercept[NoSuchDatabaseException] {
+      spark.sql("use database123")
+    }
+  }
+
+  test("throw NoSuchTableException") {
+    intercept[NoSuchTableException] {
+      spark.catalog.getTable("test_table")
+    }
+  }
+
+  test("throw NamespaceAlreadyExistsException") {
+    try {
+      spark.sql("create database test_db")
+      intercept[NamespaceAlreadyExistsException] {
+        spark.sql("create database test_db")
+      }
+    } finally {
+      spark.sql("drop database test_db")
+    }
+  }
+
+  test("throw TempTableAlreadyExistsException") {
+    try {
+      spark.sql("create temporary view test_view as select 1")
+      intercept[TempTableAlreadyExistsException] {
+        spark.sql("create temporary view test_view as select 1")
+      }
+    } finally {
+      spark.sql("drop view test_view")
+    }
+  }
+
+  test("throw TableAlreadyExistsException") {
+    withTable("testcat.test_table") {
+      spark.sql(s"create table testcat.test_table (id int)")
+      intercept[TableAlreadyExistsException] {
+        spark.sql(s"create table testcat.test_table (id int)")
+      }
+    }
+  }
+
+  test("throw ParseException") {
+    intercept[ParseException] {
+      spark.sql("selet 1").collect()
+    }
+  }
+
+  test("spark deep recursion") {
+    var df = spark.range(1)
+    for (a <- 1 to 500) {
+      df = df.union(spark.range(a, a + 1))
+    }
+    assert(df.collect().length == 501)
+  }
+
+  test("many tables") {
+    withSQLConf("spark.sql.execution.arrow.maxRecordsPerBatch" -> "10") {
+      val numTables = 20
+      try {
+        for (i <- 0 to numTables) {
+          spark.sql(s"create table testcat.table${i} (id int)")
+        }
+        assert(spark.sql("show tables in testcat").collect().length == numTables + 1)
+      } finally {
+        for (i <- 0 to numTables) {
+          spark.sql(s"drop table if exists testcat.table${i}")
+        }
+      }
+    }
+  }
 
   // Spark Result
   test("spark result schema") {
@@ -59,7 +146,7 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     withTable("test_martin") {
       // Fails, because table does not exist.
-      assertThrows[StatusRuntimeException] {
+      assertThrows[AnalysisException] {
         spark.sql("select * from test_martin").collect()
       }
       // Execute eager, DML
@@ -82,18 +169,8 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     assert(result(2) == 2)
   }
 
-  ignore("SPARK-42665: Ignore simple udf test until the udf is fully implemented.") {
-    def dummyUdf(x: Int): Int = x + 5
-    val myUdf = udf(dummyUdf _)
-    val df = spark.range(5).select(myUdf(Column("id")))
-    val result = df.collect()
-    assert(result.length == 5)
-    result.zipWithIndex.foreach { case (v, idx) =>
-      assert(v.getInt(0) == idx + 5)
-    }
-  }
-
   test("read and write") {
+    assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     val testDataPath = java.nio.file.Paths
       .get(
         IntegrationTestUtils.sparkHome,
@@ -158,12 +235,13 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
             StructField("job", StringType) :: Nil))
       .csv(testDataPath.toString)
     // Failed because the path cannot be provided both via option and load method (csv).
-    assertThrows[StatusRuntimeException] {
+    assertThrows[AnalysisException] {
       df.collect()
     }
   }
 
   test("textFile") {
+    assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     val testDataPath = java.nio.file.Paths
       .get(
         IntegrationTestUtils.sparkHome,
@@ -184,6 +262,7 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
   }
 
   test("write table") {
+    assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     withTable("myTable") {
       val df = spark.range(10).limit(3)
       df.write.mode(SaveMode.Overwrite).saveAsTable("myTable")
@@ -198,12 +277,42 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     }
   }
 
+  test("different spark session join/union") {
+    val df = spark.range(10).limit(3)
+
+    val spark2 = SparkSession
+      .builder()
+      .client(
+        SparkConnectClient
+          .builder()
+          .port(port)
+          .build())
+      .create()
+
+    val df2 = spark2.range(10).limit(3)
+
+    assertThrows[SparkException] {
+      df.union(df2).collect()
+    }
+
+    assertThrows[SparkException] {
+      df.unionByName(df2).collect()
+    }
+
+    assertThrows[SparkException] {
+      df.join(df2).collect()
+    }
+
+  }
+
   test("write without table or path") {
+    assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     // Should receive no error to write noop
     spark.range(10).write.format("noop").mode("append").save()
   }
 
   test("write jdbc") {
+    assume(IntegrationTestUtils.isSparkHiveJarAvailable)
     if (SystemUtils.isJavaVersionAtLeast(JavaVersion.JAVA_9)) {
       val url = "jdbc:derby:memory:1234"
       val table = "t1"
@@ -213,7 +322,7 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
         assert(result.length == 10)
       } finally {
         // clean up
-        assertThrows[StatusRuntimeException] {
+        assertThrows[SparkException] {
           spark.read.jdbc(url = s"$url;drop=true", table, new Properties()).collect()
         }
       }
@@ -330,7 +439,7 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     val df = spark.range(10)
     val outputFolderPath = Files.createTempDirectory("output").toAbsolutePath
     // Failed because the path cannot be provided both via option and save method.
-    assertThrows[StatusRuntimeException] {
+    assertThrows[AnalysisException] {
       df.write.option("path", outputFolderPath.toString).save(outputFolderPath.toString)
     }
   }
@@ -369,7 +478,7 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     checkFragments(result, fragmentsToCheck)
   }
 
-  private val simpleSchema = new StructType().add("value", "long", nullable = true)
+  private val simpleSchema = new StructType().add("id", "long", nullable = false)
 
   // Dataset tests
   test("Dataset inspection") {
@@ -380,15 +489,15 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     assert(!df.isLocal)
     assert(local.isLocal)
     assert(!df.isStreaming)
-    assert(df.toString.contains("[value: bigint]"))
+    assert(df.toString.contains("[id: bigint]"))
     assert(df.inputFiles.isEmpty)
   }
 
   test("Dataset schema") {
     val df = spark.range(10)
     assert(df.schema === simpleSchema)
-    assert(df.dtypes === Array(("value", "LongType")))
-    assert(df.columns === Array("value"))
+    assert(df.dtypes === Array(("id", "LongType")))
+    assert(df.columns === Array("id"))
     testCapturedStdOut(df.printSchema(), simpleSchema.treeString)
     testCapturedStdOut(df.printSchema(5), simpleSchema.treeString(5))
   }
@@ -544,13 +653,26 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     (col("id") / lit(10.0d)).as("b"),
     col("id"),
     lit("world").as("d"),
-    (col("id") % 2).cast("int").as("a"))
+    (col("id") % 2).as("a"))
 
   private def validateMyTypeResult(result: Array[MyType]): Unit = {
     result.zipWithIndex.foreach { case (MyType(id, a, b), i) =>
       assert(id == i)
       assert(a == id % 2)
       assert(b == id / 10.0d)
+    }
+  }
+
+  private def validateMyTypeResult(result: Array[(MyType, MyType, MyType)]): Unit = {
+    result.zipWithIndex.foreach { case (row, i) =>
+      val t1 = row._1
+      val t2 = row._2
+      val t3 = row._3
+      assert(t1 === t2)
+      assert(t2 === t3)
+      assert(t1.id == i)
+      assert(t1.a == t1.id % 2)
+      assert(t1.b == t1.id / 10.0d)
     }
   }
 
@@ -570,12 +692,28 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     assert(numRows === 1000)
   }
 
+  test("Dataset typed select - multiple columns") {
+    val result = spark.range(1000).select(count("id"), sum("id")).first()
+    assert(result.getLong(0) === 1000)
+    assert(result.getLong(1) === 499500)
+  }
+
   test("Dataset typed select - complex column") {
     val session = spark
     import session.implicits._
     val ds = session
       .range(3)
       .select(struct(generateMyTypeColumns: _*).as[MyType])
+    validateMyTypeResult(ds.collect())
+  }
+
+  test("Dataset typed select - multiple complex columns") {
+    val session = spark
+    import session.implicits._
+    val s = struct(generateMyTypeColumns: _*).as[MyType]
+    val ds = session
+      .range(3)
+      .select(s, s, s)
     validateMyTypeResult(ds.collect())
   }
 
@@ -644,10 +782,6 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     }
   }
 
-  test("version") {
-    assert(spark.version == SPARK_VERSION)
-  }
-
   test("time") {
     val timeFragments = Seq("Time taken: ", " ms")
     testCapturedStdOut(spark.time(spark.sql("select 1").collect()), timeFragments: _*)
@@ -673,12 +807,13 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
   }
 
   test("SparkVersion") {
-    assert(!spark.version.isEmpty)
+    assert(spark.version.nonEmpty)
+    assert(spark.version == SPARK_VERSION)
   }
 
   private def checkSameResult[E](expected: scala.collection.Seq[E], dataset: Dataset[E]): Unit = {
     dataset.withResult { result =>
-      assert(expected === result.iterator.asScala.toBuffer)
+      assert(expected === result.iterator.toBuffer)
     }
   }
 
@@ -837,7 +972,314 @@ class ClientE2ETestSuite extends RemoteSparkSession with SQLHelper {
     }.getMessage
     assert(message.contains("PARSE_SYNTAX_ERROR"))
   }
+
+  test("Dataset result destructive iterator") {
+    // Helper methods for accessing private field `idxToBatches` from SparkResult
+    val getResultMap =
+      PrivateMethod[mutable.Map[Int, Any]](Symbol("resultMap"))
+
+    def assertResultsMapEmpty(result: SparkResult[_]): Unit = {
+      val resultMap = result invokePrivate getResultMap()
+      assert(resultMap.isEmpty)
+    }
+
+    val df = spark
+      .range(0, 10, 1, 10)
+      .filter("id > 5 and id < 9")
+
+    df.withResult { result =>
+      try {
+        // build and verify the destructive iterator
+        val iterator = result.destructiveIterator
+        // resultMap Map is empty before traversing the result iterator
+        assertResultsMapEmpty(result)
+        val buffer = mutable.Set.empty[Long]
+        while (iterator.hasNext) {
+          // resultMap is empty during iteration because results get removed immediately on access.
+          assertResultsMapEmpty(result)
+          buffer += iterator.next()
+        }
+        // resultMap Map is empty afterward because all results have been removed.
+        assertResultsMapEmpty(result)
+
+        val expectedResult = Set(6L, 7L, 8L)
+        assert(buffer.size === 3 && expectedResult == buffer)
+      } finally {
+        result.close()
+      }
+    }
+  }
+
+  test("SparkSession.createDataFrame - large data set") {
+    val threshold = 1024 * 1024
+    withSQLConf(SqlApiConf.LOCAL_RELATION_CACHE_THRESHOLD_KEY -> threshold.toString) {
+      val count = 2
+      val suffix = "abcdef"
+      val str = scala.util.Random.alphanumeric.take(1024 * 1024).mkString + suffix
+      val data = Seq.tabulate(count)(i => (i, str))
+      for (_ <- 0 until 2) {
+        val df = spark.createDataFrame(data)
+        assert(df.count() === count)
+        assert(!df.filter(df("_2").endsWith(suffix)).isEmpty)
+      }
+    }
+  }
+
+  test("sql() with positional parameters") {
+    val result0 = spark.sql("select 1", Array.empty).collect()
+    assert(result0.length == 1 && result0(0).getInt(0) === 1)
+
+    val result1 = spark.sql("select ?", Array(1)).collect()
+    assert(result1.length == 1 && result1(0).getInt(0) === 1)
+
+    val result2 = spark.sql("select ?, ?", Array(1, "abc")).collect()
+    assert(result2.length == 1)
+    assert(result2(0).getInt(0) === 1)
+    assert(result2(0).getString(1) === "abc")
+  }
+
+  test("sql() with named parameters") {
+    val result0 = spark.sql("select 1", Map.empty[String, Any]).collect()
+    assert(result0.length == 1 && result0(0).getInt(0) === 1)
+
+    val result1 = spark.sql("select :abc", Map("abc" -> 1)).collect()
+    assert(result1.length == 1 && result1(0).getInt(0) === 1)
+
+    val result2 = spark.sql("select :c0 limit :l0", Map("l0" -> 1, "c0" -> "abc")).collect()
+    assert(result2.length == 1 && result2(0).getString(0) === "abc")
+  }
+
+  test("joinWith, flat schema") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(1, 2, 3).toDS().as("a")
+    val ds2 = Seq(1, 2).toDS().as("b")
+
+    val joined = ds1.joinWith(ds2, $"a.value" === $"b.value", "inner")
+
+    val expectedSchema = StructType(
+      Seq(
+        StructField("_1", IntegerType, nullable = false),
+        StructField("_2", IntegerType, nullable = false)))
+
+    assert(joined.schema === expectedSchema)
+
+    val expected = Seq((1, 1), (2, 2))
+    checkSameResult(expected, joined)
+  }
+
+  test("joinWith tuple with primitive, expression") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(1, 1, 2).toDS()
+    val ds2 = Seq(("a", 1), ("b", 2)).toDS()
+
+    val joined = ds1.joinWith(ds2, $"value" === $"_2")
+
+    // This is an inner join, so both outputs fields are non-nullable
+    val expectedSchema = StructType(
+      Seq(
+        StructField("_1", IntegerType, nullable = false),
+        StructField(
+          "_2",
+          StructType(
+            Seq(StructField("_1", StringType), StructField("_2", IntegerType, nullable = false))),
+          nullable = false)))
+    assert(joined.schema === expectedSchema)
+
+    checkSameResult(Seq((1, ("a", 1)), (1, ("a", 1)), (2, ("b", 2))), joined)
+  }
+
+  test("joinWith tuple with primitive, rows") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(1, 1, 2).toDF()
+    val ds2 = Seq(("a", 1), ("b", 2)).toDF()
+
+    val joined = ds1.joinWith(ds2, $"value" === $"_2")
+
+    checkSameResult(
+      Seq((Row(1), Row("a", 1)), (Row(1), Row("a", 1)), (Row(2), Row("b", 2))),
+      joined)
+  }
+
+  test("joinWith class with primitive, toDF") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(1, 1, 2).toDS()
+    val ds2 = Seq(ClassData("a", 1), ClassData("b", 2)).toDS()
+
+    val df = ds1
+      .joinWith(ds2, $"value" === $"b")
+      .toDF()
+      .select($"_1", $"_2.a", $"_2.b")
+    checkSameResult(Seq(Row(1, "a", 1), Row(1, "a", 1), Row(2, "b", 2)), df)
+  }
+
+  test("multi-level joinWith") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(("a", 1), ("b", 2)).toDS().as("a")
+    val ds2 = Seq(("a", 1), ("b", 2)).toDS().as("b")
+    val ds3 = Seq(("a", 1), ("b", 2)).toDS().as("c")
+
+    val joined = ds1
+      .joinWith(ds2, $"a._2" === $"b._2")
+      .as("ab")
+      .joinWith(ds3, $"ab._1._2" === $"c._2")
+
+    checkSameResult(
+      Seq(((("a", 1), ("a", 1)), ("a", 1)), ((("b", 2), ("b", 2)), ("b", 2))),
+      joined)
+  }
+
+  test("multi-level joinWith, rows") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(("a", 1), ("b", 2)).toDF().as("a")
+    val ds2 = Seq(("a", 1), ("b", 2)).toDF().as("b")
+    val ds3 = Seq(("a", 1), ("b", 2)).toDF().as("c")
+
+    val joined = ds1
+      .joinWith(ds2, $"a._2" === $"b._2")
+      .as("ab")
+      .joinWith(ds3, $"ab._1._2" === $"c._2")
+
+    checkSameResult(
+      Seq(((Row("a", 1), Row("a", 1)), Row("a", 1)), ((Row("b", 2), Row("b", 2)), Row("b", 2))),
+      joined)
+  }
+
+  test("self join") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds = Seq("1", "2").toDS().as("a")
+    val joined = ds.joinWith(ds, lit(true), "cross")
+    checkSameResult(Seq(("1", "1"), ("1", "2"), ("2", "1"), ("2", "2")), joined)
+  }
+
+  test("SPARK-11894: Incorrect results are returned when using null") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val nullInt = null.asInstanceOf[java.lang.Integer]
+    val ds1 = Seq((nullInt, "1"), (java.lang.Integer.valueOf(22), "2")).toDS()
+    val ds2 = Seq((nullInt, "1"), (java.lang.Integer.valueOf(22), "2")).toDS()
+
+    checkSameResult(
+      Seq(
+        ((nullInt, "1"), (nullInt, "1")),
+        ((nullInt, "1"), (java.lang.Integer.valueOf(22), "2")),
+        ((java.lang.Integer.valueOf(22), "2"), (nullInt, "1")),
+        ((java.lang.Integer.valueOf(22), "2"), (java.lang.Integer.valueOf(22), "2"))),
+      ds1.joinWith(ds2, lit(true), "cross"))
+  }
+
+  test("SPARK-15441: Dataset outer join") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val left = Seq(ClassData("a", 1), ClassData("b", 2)).toDS().as("left")
+    val right = Seq(ClassData("x", 2), ClassData("y", 3)).toDS().as("right")
+    val joined = left.joinWith(right, $"left.b" === $"right.b", "left")
+
+    val expectedSchema = StructType(
+      Seq(
+        StructField(
+          "_1",
+          StructType(
+            Seq(StructField("a", StringType), StructField("b", IntegerType, nullable = false))),
+          nullable = false),
+        // This is a left join, so the right output is nullable:
+        StructField(
+          "_2",
+          StructType(
+            Seq(StructField("a", StringType), StructField("b", IntegerType, nullable = false))))))
+    assert(joined.schema === expectedSchema)
+
+    val result = joined.collect().toSet
+    assert(result == Set(ClassData("a", 1) -> null, ClassData("b", 2) -> ClassData("x", 2)))
+  }
+
+  test("SPARK-37829: DataFrame outer join") {
+    // Same as "SPARK-15441: Dataset outer join" but using DataFrames instead of Datasets
+    val session: SparkSession = spark
+    import session.implicits._
+    val left = Seq(ClassData("a", 1), ClassData("b", 2)).toDF().as("left")
+    val right = Seq(ClassData("x", 2), ClassData("y", 3)).toDF().as("right")
+    val joined = left.joinWith(right, $"left.b" === $"right.b", "left")
+
+    val leftFieldSchema = StructType(
+      Seq(StructField("a", StringType), StructField("b", IntegerType, nullable = false)))
+    val rightFieldSchema = StructType(
+      Seq(StructField("a", StringType), StructField("b", IntegerType, nullable = false)))
+    val expectedSchema = StructType(
+      Seq(
+        StructField("_1", leftFieldSchema, nullable = false),
+        // This is a left join, so the right output is nullable:
+        StructField("_2", rightFieldSchema)))
+    assert(joined.schema === expectedSchema)
+
+    val result = joined.collect().toSet
+    val expected = Set(
+      new GenericRowWithSchema(Array("a", 1), leftFieldSchema) ->
+        null,
+      new GenericRowWithSchema(Array("b", 2), leftFieldSchema) ->
+        new GenericRowWithSchema(Array("x", 2), rightFieldSchema))
+    assert(result == expected)
+  }
+
+  test("SPARK-24762: joinWith on Option[Product]") {
+    val session: SparkSession = spark
+    import session.implicits._
+    val ds1 = Seq(Some((1, 2)), Some((2, 3)), None).toDS().as("a")
+    val ds2 = Seq(Some((1, 2)), Some((2, 3)), None).toDS().as("b")
+    val joined = ds1.joinWith(ds2, $"a.value._1" === $"b.value._2", "inner")
+    checkSameResult(Seq((Some((2, 3)), Some((1, 2)))), joined)
+  }
+
+  test("dropDuplicatesWithinWatermark not supported in batch DataFrame") {
+    def testAndVerify(df: Dataset[_]): Unit = {
+      val exc = intercept[AnalysisException] {
+        df.write.format("noop").mode(SaveMode.Append).save()
+      }
+
+      assert(exc.getMessage.contains("dropDuplicatesWithinWatermark is not supported"))
+      assert(exc.getMessage.contains("batch DataFrames/DataSets"))
+    }
+
+    val result = spark.range(10).dropDuplicatesWithinWatermark()
+    testAndVerify(result)
+
+    val result2 = spark
+      .range(10)
+      .withColumn("newcol", col("id"))
+      .dropDuplicatesWithinWatermark("newcol")
+    testAndVerify(result2)
+  }
+
+  test("Dataset.metadataColumn") {
+    val session: SparkSession = spark
+    import session.implicits._
+    withTempPath { file =>
+      val path = file.getAbsoluteFile.toURI.toString
+      spark
+        .range(0, 100, 1, 1)
+        .withColumn("_metadata", concat(lit("lol_"), col("id")))
+        .write
+        .parquet(file.toPath.toAbsolutePath.toString)
+
+      val df = spark.read.parquet(path)
+      val (filepath, rc) = df
+        .groupBy(df.metadataColumn("_metadata").getField("file_path"))
+        .count()
+        .as[(String, Long)]
+        .head()
+      assert(filepath.startsWith(path))
+      assert(rc == 100)
+    }
+  }
 }
+
+private[sql] case class ClassData(a: String, b: Int)
 
 private[sql] case class MyType(id: Long, a: Double, b: Double)
 private[sql] case class KV(key: String, value: Int)
