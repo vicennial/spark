@@ -21,7 +21,6 @@ import scala.collection.JavaConverters._
 
 import com.google.protobuf.ByteString
 import io.grpc.stub.StreamObserver
-import org.apache.commons.lang3.{JavaVersion, SystemUtils}
 
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.connect.proto
@@ -32,10 +31,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connect.common.InvalidPlanInput
 import org.apache.spark.sql.connect.common.LiteralValueProtoConverter.toLiteralProto
-import org.apache.spark.sql.connect.service.{ExecuteHolder, ExecuteStatus, SessionHolder, SessionStatus, SparkConnectService}
 import org.apache.spark.sql.execution.arrow.ArrowConverters
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
@@ -54,13 +51,11 @@ trait SparkConnectPlanTest extends SharedSparkSession {
   }
 
   def transform(rel: proto.Relation): logical.LogicalPlan = {
-    new SparkConnectPlanner(SessionHolder.forTesting(spark)).transformRelation(rel)
+    new SparkConnectPlanner(spark).transformRelation(rel)
   }
 
   def transform(cmd: proto.Command): Unit = {
-    val executeHolder = buildExecutePlanHolder(cmd)
-    new SparkConnectPlanner(executeHolder.sessionHolder)
-      .process(cmd, new MockObserver(), executeHolder)
+    new SparkConnectPlanner(spark).process(cmd, "clientId", new MockObserver())
   }
 
   def readRel: proto.Relation =
@@ -72,20 +67,6 @@ trait SparkConnectPlanTest extends SharedSparkSession {
           .setNamedTable(proto.Read.NamedTable.newBuilder().setUnparsedIdentifier("table"))
           .build())
       .build()
-
-  /**
-   * Creates a local relation for testing purposes. The local relation is mapped to it's
-   * equivalent in Catalyst and can be easily used for planner testing.
-   *
-   * @param schema
-   *   the schema of LocalRelation
-   * @param data
-   *   the data of LocalRelation
-   * @return
-   */
-  def createLocalRelationProto(schema: StructType, data: Seq[InternalRow]): proto.Relation = {
-    createLocalRelationProto(DataTypeUtils.toAttributes(schema), data)
-  }
 
   /**
    * Creates a local relation for testing purposes. The local relation is mapped to it's
@@ -105,38 +86,14 @@ trait SparkConnectPlanTest extends SharedSparkSession {
     val bytes = ArrowConverters
       .toBatchWithSchemaIterator(
         data.iterator,
-        DataTypeUtils.fromAttributes(attrs.map(_.toAttribute)),
+        StructType.fromAttributes(attrs.map(_.toAttribute)),
         Long.MaxValue,
         Long.MaxValue,
-        null,
-        true)
+        null)
       .next()
 
     localRelationBuilder.setData(ByteString.copyFrom(bytes))
     proto.Relation.newBuilder().setLocalRelation(localRelationBuilder.build()).build()
-  }
-
-  def buildExecutePlanHolder(command: proto.Command): ExecuteHolder = {
-    val sessionHolder = SessionHolder.forTesting(spark)
-    sessionHolder.eventManager.status_(SessionStatus.Started)
-
-    val context = proto.UserContext
-      .newBuilder()
-      .setUserId(sessionHolder.userId)
-      .build()
-    val plan = proto.Plan
-      .newBuilder()
-      .setCommand(command)
-      .build()
-    val request = proto.ExecutePlanRequest
-      .newBuilder()
-      .setPlan(plan)
-      .setSessionId(sessionHolder.sessionId)
-      .setUserContext(context)
-      .build()
-    val executeHolder = SparkConnectService.executionManager.createExecuteHolder(request)
-    executeHolder.eventsManager.status_(ExecuteStatus.Started)
-    executeHolder
   }
 }
 
@@ -424,36 +381,6 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
     assert(e2.getMessage.contains("either deduplicate on all columns or a subset of columns"))
   }
 
-  test("Test invalid deduplicateWithinWatermark") {
-    val deduplicateWithinWatermark = proto.Deduplicate
-      .newBuilder()
-      .setInput(readRel)
-      .setAllColumnsAsKeys(true)
-      .addColumnNames("test")
-      .setWithinWatermark(true)
-
-    val e = intercept[InvalidPlanInput] {
-      transform(
-        proto.Relation.newBuilder
-          .setDeduplicate(deduplicateWithinWatermark)
-          .build())
-    }
-    assert(
-      e.getMessage.contains("Cannot deduplicate on both all columns and a subset of columns"))
-
-    val deduplicateWithinWatermark2 = proto.Deduplicate
-      .newBuilder()
-      .setInput(readRel)
-      .setWithinWatermark(true)
-    val e2 = intercept[InvalidPlanInput] {
-      transform(
-        proto.Relation.newBuilder
-          .setDeduplicate(deduplicateWithinWatermark2)
-          .build())
-    }
-    assert(e2.getMessage.contains("either deduplicate on all columns or a subset of columns"))
-  }
-
   test("Test invalid intersect, except") {
     // Except with union_by_name=true
     val except = proto.SetOperation
@@ -479,8 +406,6 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
   }
 
   test("transform LocalRelation") {
-    // TODO(SPARK-44121) Renable Arrow-based connect tests in Java 21
-    assume(SystemUtils.isJavaVersionAtMost(JavaVersion.JAVA_17))
     val rows = (0 until 10).map { i =>
       InternalRow(i, UTF8String.fromString(s"str-$i"), InternalRow(i))
     }
@@ -495,7 +420,7 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
       proj(row).copy()
     }
 
-    val localRelation = createLocalRelationProto(schema, inputRows)
+    val localRelation = createLocalRelationProto(schema.toAttributes, inputRows)
     val df = Dataset.ofRows(spark, transform(localRelation))
     val array = df.collect()
     assertResult(10)(array.length)
@@ -509,7 +434,7 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
 
   test("Empty ArrowBatch") {
     val schema = StructType(Seq(StructField("int", IntegerType)))
-    val data = ArrowConverters.createEmptyArrowBatch(schema, null, true)
+    val data = ArrowConverters.createEmptyArrowBatch(schema, null)
     val localRelation = proto.Relation
       .newBuilder()
       .setLocalRelation(
@@ -582,8 +507,6 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
   }
 
   test("transform UnresolvedStar and ExpressionString") {
-    // TODO(SPARK-44121) Renable Arrow-based connect tests in Java 21
-    assume(SystemUtils.isJavaVersionAtMost(JavaVersion.JAVA_17))
     val sql =
       "SELECT * FROM VALUES (1,'spark',1), (2,'hadoop',2), (3,'kafka',3) AS tab(id, name, value)"
     val input = proto.Relation
@@ -620,8 +543,6 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
   }
 
   test("transform UnresolvedStar with target field") {
-    // TODO(SPARK-44121) Renable Arrow-based connect tests in Java 21
-    assume(SystemUtils.isJavaVersionAtMost(JavaVersion.JAVA_17))
     val rows = (0 until 10).map { i =>
       InternalRow(InternalRow(InternalRow(i, i + 1)))
     }
@@ -638,7 +559,7 @@ class SparkConnectPlannerSuite extends SparkFunSuite with SparkConnectPlanTest {
       proj(row).copy()
     }
 
-    val localRelation = createLocalRelationProto(schema, inputRows)
+    val localRelation = createLocalRelationProto(schema.toAttributes, inputRows)
 
     val project =
       proto.Project

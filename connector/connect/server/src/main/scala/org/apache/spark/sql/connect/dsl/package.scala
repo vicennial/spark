@@ -596,17 +596,6 @@ package object dsl {
               .addAllColumnNames(colNames.asJava))
           .build()
 
-      def deduplicateWithinWatermark(colNames: Seq[String]): Relation =
-        Relation
-          .newBuilder()
-          .setDeduplicate(
-            Deduplicate
-              .newBuilder()
-              .setInput(logicalPlan)
-              .addAllColumnNames(colNames.asJava)
-              .setWithinWatermark(true))
-          .build()
-
       def distinct(): Relation =
         Relation
           .newBuilder()
@@ -1056,7 +1045,7 @@ package object dsl {
       def randomSplit(weights: Array[Double], seed: Long): Array[Relation] = {
         require(
           weights.forall(_ >= 0),
-          s"Weights must be non-negative, but got ${weights.mkString("[", ",", "]")}")
+          s"Weights must be nonnegative, but got ${weights.mkString("[", ",", "]")}")
         require(
           weights.sum > 0,
           s"Sum of weights must be positive, but got ${weights.mkString("[", ",", "]")}")

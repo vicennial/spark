@@ -21,7 +21,7 @@ import scala.collection.convert.ImplicitConversions._
 
 import org.apache.spark.connect.proto
 import org.apache.spark.sql.types._
-import org.apache.spark.util.SparkClassUtils
+import org.apache.spark.util.Utils
 
 /**
  * Helper class for conversions between [[DataType]] and [[proto.DataType]].
@@ -124,7 +124,7 @@ object DataTypeProtoConverter {
     }
 
     if (t.hasJvmClass) {
-      SparkClassUtils
+      Utils
         .classForName[UserDefinedType[_]](t.getJvmClass)
         .getConstructor()
         .newInstance()
@@ -144,23 +144,59 @@ object DataTypeProtoConverter {
 
   def toConnectProtoType(t: DataType): proto.DataType = {
     t match {
-      case NullType => ProtoDataTypes.NullType
+      case NullType =>
+        proto.DataType
+          .newBuilder()
+          .setNull(proto.DataType.NULL.getDefaultInstance)
+          .build()
 
-      case BooleanType => ProtoDataTypes.BooleanType
+      case BooleanType =>
+        proto.DataType
+          .newBuilder()
+          .setBoolean(proto.DataType.Boolean.getDefaultInstance)
+          .build()
 
-      case BinaryType => ProtoDataTypes.BinaryType
+      case BinaryType =>
+        proto.DataType
+          .newBuilder()
+          .setBinary(proto.DataType.Binary.getDefaultInstance)
+          .build()
 
-      case ByteType => ProtoDataTypes.ByteType
+      case ByteType =>
+        proto.DataType
+          .newBuilder()
+          .setByte(proto.DataType.Byte.getDefaultInstance)
+          .build()
 
-      case ShortType => ProtoDataTypes.ShortType
+      case ShortType =>
+        proto.DataType
+          .newBuilder()
+          .setShort(proto.DataType.Short.getDefaultInstance)
+          .build()
 
-      case IntegerType => ProtoDataTypes.IntegerType
+      case IntegerType =>
+        proto.DataType
+          .newBuilder()
+          .setInteger(proto.DataType.Integer.getDefaultInstance)
+          .build()
 
-      case LongType => ProtoDataTypes.LongType
+      case LongType =>
+        proto.DataType
+          .newBuilder()
+          .setLong(proto.DataType.Long.getDefaultInstance)
+          .build()
 
-      case FloatType => ProtoDataTypes.FloatType
+      case FloatType =>
+        proto.DataType
+          .newBuilder()
+          .setFloat(proto.DataType.Float.getDefaultInstance)
+          .build()
 
-      case DoubleType => ProtoDataTypes.DoubleType
+      case DoubleType =>
+        proto.DataType
+          .newBuilder()
+          .setDouble(proto.DataType.Double.getDefaultInstance)
+          .build()
 
       case DecimalType.Fixed(precision, scale) =>
         proto.DataType
@@ -169,7 +205,11 @@ object DataTypeProtoConverter {
             proto.DataType.Decimal.newBuilder().setPrecision(precision).setScale(scale).build())
           .build()
 
-      case StringType => ProtoDataTypes.StringType
+      case StringType =>
+        proto.DataType
+          .newBuilder()
+          .setString(proto.DataType.String.getDefaultInstance)
+          .build()
 
       case CharType(length) =>
         proto.DataType
@@ -183,13 +223,29 @@ object DataTypeProtoConverter {
           .setVarChar(proto.DataType.VarChar.newBuilder().setLength(length).build())
           .build()
 
-      case DateType => ProtoDataTypes.DateType
+      case DateType =>
+        proto.DataType
+          .newBuilder()
+          .setDate(proto.DataType.Date.getDefaultInstance)
+          .build()
 
-      case TimestampType => ProtoDataTypes.TimestampType
+      case TimestampType =>
+        proto.DataType
+          .newBuilder()
+          .setTimestamp(proto.DataType.Timestamp.getDefaultInstance)
+          .build()
 
-      case TimestampNTZType => ProtoDataTypes.TimestampNTZType
+      case TimestampNTZType =>
+        proto.DataType
+          .newBuilder()
+          .setTimestampNtz(proto.DataType.TimestampNTZ.getDefaultInstance)
+          .build()
 
-      case CalendarIntervalType => ProtoDataTypes.CalendarIntervalType
+      case CalendarIntervalType =>
+        proto.DataType
+          .newBuilder()
+          .setCalendarInterval(proto.DataType.CalendarInterval.getDefaultInstance)
+          .build()
 
       case YearMonthIntervalType(startField, endField) =>
         proto.DataType

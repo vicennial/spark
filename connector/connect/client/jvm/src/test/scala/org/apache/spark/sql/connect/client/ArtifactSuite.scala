@@ -20,16 +20,14 @@ import java.io.InputStream
 import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.TimeUnit
 
-import scala.collection.JavaConverters._
-
+import collection.JavaConverters._
 import com.google.protobuf.ByteString
 import io.grpc.{ManagedChannel, Server}
 import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
-import org.apache.commons.codec.digest.DigestUtils.sha256Hex
 import org.scalatest.BeforeAndAfterEach
 
+import org.apache.spark.connect.proto
 import org.apache.spark.connect.proto.AddArtifactsRequest
-import org.apache.spark.sql.connect.client.SparkConnectClient.Configuration
 import org.apache.spark.sql.connect.client.util.ConnectFunSuite
 
 class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
@@ -39,9 +37,6 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
   private var server: Server = _
   private var artifactManager: ArtifactManager = _
   private var channel: ManagedChannel = _
-  private var retryPolicy: GrpcRetryHandler.RetryPolicy = _
-  private var bstub: CustomSparkConnectBlockingStub = _
-  private var stub: CustomSparkConnectStub = _
 
   private def startDummyServer(): Unit = {
     service = new DummySparkConnectService()
@@ -54,10 +49,7 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
 
   private def createArtifactManager(): Unit = {
     channel = InProcessChannelBuilder.forName(getClass.getName).directExecutor().build()
-    retryPolicy = GrpcRetryHandler.RetryPolicy()
-    bstub = new CustomSparkConnectBlockingStub(channel, retryPolicy)
-    stub = new CustomSparkConnectStub(channel, retryPolicy)
-    artifactManager = new ArtifactManager(Configuration(), "", bstub, stub)
+    artifactManager = new ArtifactManager(proto.UserContext.newBuilder().build(), channel)
   }
 
   override def beforeEach(): Unit = {
@@ -83,7 +75,7 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
   }
 
   private val CHUNK_SIZE: Int = 32 * 1024
-  protected def artifactFilePath: Path = commonResourcePath.resolve("artifact-tests")
+  protected def artifactFilePath: Path = baseResourcePath.resolve("artifact-tests")
   protected def artifactCrcPath: Path = artifactFilePath.resolve("crc")
 
   private def getCrcValues(filePath: Path): Seq[Long] = {
@@ -254,18 +246,5 @@ class ArtifactSuite extends ConnectFunSuite with BeforeAndAfterEach {
 
     assertFileDataEquality(remainingArtifacts.get(0).getData, Paths.get(file3))
     assertFileDataEquality(remainingArtifacts.get(1).getData, Paths.get(file4))
-  }
-
-  test("cache an artifact and check its presence") {
-    val s = "Hello, World!"
-    val blob = s.getBytes("UTF-8")
-    val expectedHash = sha256Hex(blob)
-    assert(artifactManager.isCachedArtifact(expectedHash) === false)
-    val actualHash = artifactManager.cacheArtifact(blob)
-    assert(actualHash === expectedHash)
-    assert(artifactManager.isCachedArtifact(expectedHash) === true)
-
-    val receivedRequests = service.getAndClearLatestAddArtifactRequests()
-    assert(receivedRequests.size == 1)
   }
 }

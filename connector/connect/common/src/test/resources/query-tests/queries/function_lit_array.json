@@ -32,13 +32,13 @@
               "containsNull": true
             }
           },
-          "elements": [{
+          "element": [{
             "array": {
               "elementType": {
                 "integer": {
                 }
               },
-              "elements": [{
+              "element": [{
                 "integer": 1
               }]
             }
@@ -48,7 +48,7 @@
                 "integer": {
                 }
               },
-              "elements": [{
+              "element": [{
                 "integer": 2
               }]
             }
@@ -58,7 +58,7 @@
                 "integer": {
                 }
               },
-              "elements": [{
+              "element": [{
                 "integer": 3
               }]
             }
@@ -82,7 +82,7 @@
               "containsNull": true
             }
           },
-          "elements": [{
+          "element": [{
             "array": {
               "elementType": {
                 "array": {
@@ -93,13 +93,13 @@
                   "containsNull": true
                 }
               },
-              "elements": [{
+              "element": [{
                 "array": {
                   "elementType": {
                     "integer": {
                     }
                   },
-                  "elements": [{
+                  "element": [{
                     "integer": 1
                   }]
                 }
@@ -116,13 +116,13 @@
                   "containsNull": true
                 }
               },
-              "elements": [{
+              "element": [{
                 "array": {
                   "elementType": {
                     "integer": {
                     }
                   },
-                  "elements": [{
+                  "element": [{
                     "integer": 2
                   }]
                 }
@@ -139,13 +139,13 @@
                   "containsNull": true
                 }
               },
-              "elements": [{
+              "element": [{
                 "array": {
                   "elementType": {
                     "integer": {
                     }
                   },
-                  "elements": [{
+                  "element": [{
                     "integer": 3
                   }]
                 }
@@ -161,7 +161,7 @@
             "boolean": {
             }
           },
-          "elements": [{
+          "element": [{
             "boolean": true
           }, {
             "boolean": false
@@ -179,7 +179,7 @@
             "short": {
             }
           },
-          "elements": [{
+          "element": [{
             "short": 9872
           }, {
             "short": 9873
@@ -195,7 +195,7 @@
             "integer": {
             }
           },
-          "elements": [{
+          "element": [{
             "integer": -8726532
           }, {
             "integer": 8726532
@@ -211,7 +211,7 @@
             "long": {
             }
           },
-          "elements": [{
+          "element": [{
             "long": "7834609328726531"
           }, {
             "long": "7834609328726532"
@@ -227,7 +227,7 @@
             "double": {
             }
           },
-          "elements": [{
+          "element": [{
             "double": 2.718281828459045
           }, {
             "double": 1.0
@@ -243,7 +243,7 @@
             "float": {
             }
           },
-          "elements": [{
+          "element": [{
             "float": -0.8
           }, {
             "float": -0.7
@@ -261,7 +261,7 @@
               "precision": 38
             }
           },
-          "elements": [{
+          "element": [{
             "decimal": {
               "value": "89.97620",
               "precision": 7,
@@ -285,7 +285,7 @@
               "precision": 38
             }
           },
-          "elements": [{
+          "element": [{
             "decimal": {
               "value": "89889.7667231",
               "precision": 12,
@@ -307,7 +307,7 @@
             "string": {
             }
           },
-          "elements": [{
+          "element": [{
             "string": "connect!"
           }, {
             "string": "disconnect!"
@@ -325,7 +325,7 @@
             "string": {
             }
           },
-          "elements": [{
+          "element": [{
             "string": "ABCDEFGHIJ"
           }, {
             "string": "BCDEFGHIJK"
@@ -339,7 +339,7 @@
             "date": {
             }
           },
-          "elements": [{
+          "element": [{
             "date": 18545
           }, {
             "date": 18546
@@ -353,7 +353,7 @@
             "timestamp": {
             }
           },
-          "elements": [{
+          "element": [{
             "timestamp": "1677155519808000"
           }, {
             "timestamp": "1677155519809000"
@@ -367,7 +367,7 @@
             "timestamp": {
             }
           },
-          "elements": [{
+          "element": [{
             "timestamp": "12345000"
           }, {
             "timestamp": "23456000"
@@ -381,7 +381,7 @@
             "timestampNtz": {
             }
           },
-          "elements": [{
+          "element": [{
             "timestampNtz": "1677184560000000"
           }, {
             "timestampNtz": "1677188160000000"
@@ -395,7 +395,7 @@
             "date": {
             }
           },
-          "elements": [{
+          "element": [{
             "date": 19411
           }, {
             "date": 19417
@@ -411,7 +411,7 @@
               "endField": 3
             }
           },
-          "elements": [{
+          "element": [{
             "dayTimeInterval": "100000000"
           }, {
             "dayTimeInterval": "200000000"
@@ -427,7 +427,7 @@
               "endField": 1
             }
           },
-          "elements": [{
+          "element": [{
             "yearMonthInterval": 0
           }, {
             "yearMonthInterval": 0
@@ -441,7 +441,7 @@
             "calendarInterval": {
             }
           },
-          "elements": [{
+          "element": [{
             "calendarInterval": {
               "months": 2,
               "days": 20,

@@ -23,7 +23,7 @@ import io.grpc.stub.StreamObserver
 
 import org.apache.spark.connect.proto
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.connect.common.{DataTypeProtoConverter, InvalidPlanInput, StorageLevelProtoConverter}
 import org.apache.spark.sql.connect.planner.SparkConnectPlanner
 import org.apache.spark.sql.execution.{CodegenMode, CostMode, ExtendedMode, FormattedMode, SimpleMode}
@@ -33,13 +33,12 @@ private[connect] class SparkConnectAnalyzeHandler(
     extends Logging {
 
   def handle(request: proto.AnalyzePlanRequest): Unit = {
-    val sessionHolder = SparkConnectService.getOrCreateIsolatedSession(
-      request.getUserContext.getUserId,
-      request.getSessionId)
-    // `withSession` ensures that session-specific artifacts (such as JARs and class files) are
-    // available during processing (such as deserialization).
-    sessionHolder.withSession { _ =>
-      val response = process(request, sessionHolder)
+    val session =
+      SparkConnectService
+        .getOrCreateIsolatedSession(request.getUserContext.getUserId, request.getSessionId)
+        .session
+    session.withActive {
+      val response = process(request, session)
       responseObserver.onNext(response)
       responseObserver.onCompleted()
     }
@@ -47,9 +46,8 @@ private[connect] class SparkConnectAnalyzeHandler(
 
   def process(
       request: proto.AnalyzePlanRequest,
-      sessionHolder: SessionHolder): proto.AnalyzePlanResponse = {
-    lazy val planner = new SparkConnectPlanner(sessionHolder)
-    val session = sessionHolder.session
+      session: SparkSession): proto.AnalyzePlanResponse = {
+    lazy val planner = new SparkConnectPlanner(session)
     val builder = proto.AnalyzePlanResponse.newBuilder()
 
     request.getAnalyzeCase match {
@@ -87,14 +85,10 @@ private[connect] class SparkConnectAnalyzeHandler(
             .build())
 
       case proto.AnalyzePlanRequest.AnalyzeCase.TREE_STRING =>
-        val schema = Dataset
+        val treeString = Dataset
           .ofRows(session, planner.transformRelation(request.getTreeString.getPlan.getRoot))
           .schema
-        val treeString = if (request.getTreeString.hasLevel) {
-          schema.treeString(request.getTreeString.getLevel)
-        } else {
-          schema.treeString
-        }
+          .treeString
         builder.setTreeString(
           proto.AnalyzePlanResponse.TreeString
             .newBuilder()

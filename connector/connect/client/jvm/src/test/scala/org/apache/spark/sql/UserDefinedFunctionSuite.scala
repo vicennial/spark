@@ -18,14 +18,15 @@ package org.apache.spark.sql
 
 import scala.reflect.runtime.universe.typeTag
 
-import org.apache.spark.SparkException
+import org.scalatest.BeforeAndAfterEach
+
 import org.apache.spark.sql.catalyst.ScalaReflection
 import org.apache.spark.sql.connect.client.util.ConnectFunSuite
 import org.apache.spark.sql.connect.common.UdfPacket
 import org.apache.spark.sql.functions.udf
-import org.apache.spark.util.SparkSerDeUtils
+import org.apache.spark.util.Utils
 
-class UserDefinedFunctionSuite extends ConnectFunSuite {
+class UserDefinedFunctionSuite extends ConnectFunSuite with BeforeAndAfterEach {
 
   test("udf and encoder serialization") {
     def func(x: Int): Int = x + 1
@@ -41,49 +42,10 @@ class UserDefinedFunctionSuite extends ConnectFunSuite {
 
     assert(udfObj.getNullable)
 
-    val deSer = SparkSerDeUtils.deserialize[UdfPacket](udfObj.getPayload.toByteArray)
+    val deSer = Utils.deserialize[UdfPacket](udfObj.getPayload.toByteArray)
 
     assert(deSer.function.asInstanceOf[Int => Int](5) == func(5))
     assert(deSer.outputEncoder == ScalaReflection.encoderFor(typeTag[Int]))
     assert(deSer.inputEncoders == Seq(ScalaReflection.encoderFor(typeTag[Int])))
   }
-
-  private def testNonDeserializable(f: Int => Int): Unit = {
-    val e = intercept[SparkException](udf(f))
-    assert(
-      e.getMessage.contains(
-        "UDF cannot be executed on a Spark cluster: it cannot be deserialized."))
-    assert(e.getMessage.contains("This is not supported by java serialization."))
-  }
-
-  test("non deserializable UDFs") {
-    testNonDeserializable(Command2(Command1()).indirect)
-    testNonDeserializable(MultipleLambdas().indirect)
-    testNonDeserializable(SelfRef(22).method)
-  }
-
-  test("serializable UDFs") {
-    val direct = (i: Int) => i + 1
-    val indirect = (i: Int) => direct(i)
-    udf(indirect)
-    udf(Command1().direct)
-    udf(MultipleLambdas().direct)
-  }
-}
-
-case class Command1() extends Serializable {
-  val direct: Int => Int = (i: Int) => i + 1
-}
-
-case class Command2(prev: Command1) extends Serializable {
-  val indirect: Int => Int = (i: Int) => prev.direct(i)
-}
-
-case class SelfRef(start: Int) extends Serializable {
-  val method: Int => Int = (i: Int) => i + start
-}
-
-case class MultipleLambdas() extends Serializable {
-  val direct: Int => Int = (i: Int) => i + 1
-  val indirect: Int => Int = (i: Int) => direct(i)
 }

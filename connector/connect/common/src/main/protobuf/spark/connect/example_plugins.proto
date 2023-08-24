@@ -19,7 +19,6 @@ syntax = 'proto3';
 
 import "spark/connect/relations.proto";
 import "spark/connect/expressions.proto";
-option go_package = "internal/generated";
 
 package spark.connect;
 
