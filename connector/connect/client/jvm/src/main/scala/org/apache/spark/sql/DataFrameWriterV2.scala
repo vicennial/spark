@@ -92,12 +92,6 @@ final class DataFrameWriterV2[T] private[sql] (table: String, ds: Dataset[T])
   /**
    * Append the contents of the data frame to the output table.
    *
-   * If the output table does not exist, this operation will fail with
-   * [[org.apache.spark.sql.catalyst.analysis.NoSuchTableException]]. The data frame will be
-   * validated to ensure it is compatible with the existing table.
-   *
-   * @throws org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-   *   If the table does not exist
    */
   def append(): Unit = {
     executeWriteOperation(proto.WriteOperationV2.Mode.MODE_APPEND)
@@ -107,12 +101,6 @@ final class DataFrameWriterV2[T] private[sql] (table: String, ds: Dataset[T])
    * Overwrite rows matching the given filter condition with the contents of the data frame in the
    * output table.
    *
-   * If the output table does not exist, this operation will fail with
-   * [[org.apache.spark.sql.catalyst.analysis.NoSuchTableException]]. The data frame will be
-   * validated to ensure it is compatible with the existing table.
-   *
-   * @throws org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-   *   If the table does not exist
    */
   def overwrite(condition: Column): Unit = {
     overwriteCondition = Some(condition.expr)
@@ -126,12 +114,6 @@ final class DataFrameWriterV2[T] private[sql] (table: String, ds: Dataset[T])
    * This operation is equivalent to Hive's `INSERT OVERWRITE ... PARTITION`, which replaces
    * partitions dynamically depending on the contents of the data frame.
    *
-   * If the output table does not exist, this operation will fail with
-   * [[org.apache.spark.sql.catalyst.analysis.NoSuchTableException]]. The data frame will be
-   * validated to ensure it is compatible with the existing table.
-   *
-   * @throws org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-   *   If the table does not exist
    */
   def overwritePartitions(): Unit = {
     executeWriteOperation(proto.WriteOperationV2.Mode.MODE_OVERWRITE_PARTITIONS)
@@ -225,11 +207,6 @@ trait CreateTableWriter[T] extends WriteConfigMethods[CreateTableWriter[T]] {
    * The new table's schema, partition layout, properties, and other configuration will be based
    * on the configuration set on this writer.
    *
-   * If the output table exists, this operation will fail with
-   * [[org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException]].
-   *
-   * @throws org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
-   *   If the table already exists
    */
   def create(): Unit
 
@@ -239,11 +216,6 @@ trait CreateTableWriter[T] extends WriteConfigMethods[CreateTableWriter[T]] {
    * The existing table's schema, partition layout, properties, and other configuration will be
    * replaced with the contents of the data frame and the configuration set on this writer.
    *
-   * If the output table does not exist, this operation will fail with
-   * [[org.apache.spark.sql.catalyst.analysis.CannotReplaceMissingTableException]].
-   *
-   * @throws org.apache.spark.sql.catalyst.analysis.CannotReplaceMissingTableException
-   *   If the table does not exist
    */
   def replace(): Unit
 
