@@ -971,7 +971,7 @@ For more details see [INVALID_HANDLE](sql-error-conditions-invalid-handle-error-
 
 SQLSTATE: none assigned
 
-Cannot create the table `<tableName>` having the nested column `<columnName>` whose name contains invalid characters `<invalidChars>` in Hive metastore.
+Cannot create the table `<tableName>` having the column `<columnName>` whose name contains invalid characters `<invalidChars>` in Hive metastore.
 
 ### INVALID_IDENTIFIER
 
@@ -1764,6 +1764,18 @@ SQLSTATE: none assigned
 
 Failed to analyze the Python user defined table function: `<msg>`
 
+### TABLE_VALUED_FUNCTION_REQUIRED_METADATA_INCOMPATIBLE_WITH_CALL
+
+[SQLSTATE: 22023](sql-error-conditions-sqlstates.html#class-22-data-exception)
+
+Failed to evaluate the table function `<functionName>` because its table metadata `<requestedMetadata>`, but the function call `<invalidFunctionCallProperty>`.
+
+### TABLE_VALUED_FUNCTION_REQUIRED_METADATA_INVALID
+
+[SQLSTATE: 22023](sql-error-conditions-sqlstates.html#class-22-data-exception)
+
+Failed to evaluate the table function `<functionName>` because its table metadata was invalid; `<reason>`.
+
 ### TABLE_VALUED_FUNCTION_TOO_MANY_TABLE_ARGUMENTS
 
 SQLSTATE: none assigned
@@ -2087,14 +2099,6 @@ SQLSTATE: none assigned
 The table `<tableName>` does not support `<operation>`.
 
 For more details see [UNSUPPORTED_TABLE_OPERATION](sql-error-conditions-unsupported-table-operation-error-class.html)
-
-### [UNSUPPORTED_TEMP_VIEW_OPERATION](sql-error-conditions-unsupported-temp-view-operation-error-class.html)
-
-SQLSTATE: none assigned
-
-The temp view `<tempViewName>` does not support `<operation>`.
-
-For more details see [UNSUPPORTED_TEMP_VIEW_OPERATION](sql-error-conditions-unsupported-temp-view-operation-error-class.html)
 
 ### UNSUPPORTED_TYPED_LITERAL
 
