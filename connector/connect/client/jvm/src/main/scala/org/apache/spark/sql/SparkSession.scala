@@ -595,7 +595,7 @@ class SparkSession private[sql] (
   def addArtifacts(uri: URI*): Unit = client.addArtifacts(uri)
 
   /**
-   *
+   * Register a ClassFinder for dynamically generated classes.
    * @since 3.5.0
    */
   @Experimental
@@ -792,7 +792,7 @@ object SparkSession extends Logging {
     }
 
     /**
-     * Add an interceptor `ClientInterceptor` to be used during channel creation.
+     * Add an interceptor to be used during channel creation.
      *
      * Note that interceptors added last are executed first by gRPC.
      *
