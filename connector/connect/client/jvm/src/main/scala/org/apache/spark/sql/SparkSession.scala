@@ -446,7 +446,7 @@ class SparkSession private[sql] (
   // Disable style checker so "implicits" object can start with lowercase i
   /**
    * (Scala-specific) Implicit methods available in Scala for converting common names and
-   * `Symbols` into [[Column]]s, and for converting common Scala objects into `DataFrame`s.
+   * Symbols into [[Column]]s, and for converting common Scala objects into DataFrame`s.
    *
    * {{{
    *   val sparkSession = SparkSession.builder.getOrCreate()
