@@ -1527,6 +1527,12 @@ object ConnectScalaClientUnidoc extends UnidocSettings {
   import sbtunidoc.JavaUnidocPlugin.autoImport._
   import sbtunidoc.ScalaUnidocPlugin.autoImport._
 
+  override def ignoreUndocumentedPackages(packages: Seq[Seq[File]]): Seq[Seq[File]] = {
+    super
+      .ignoreUndocumentedPackages(packages)
+      .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/sql/application")))
+  }
+
   lazy val settings = baseSettings ++ Seq(
     (ScalaUnidoc / unidoc / unidocProjectFilter) := inProjects(connectClient, connectCommon),
     (JavaUnidoc / unidoc / unidocProjectFilter) := inProjects(connectClient, connectCommon),
