@@ -270,7 +270,7 @@ class ArtifactManager(session: SparkSession) extends Logging {
         // destination path, otherwise user is able to overwrite arbitrary file
         // on spark driver node.
         // We can temporarily allow the behavior by setting spark config
-        // `spark.connect.copyFromLocalToFs.allowDestLocal`
+        // `spark.sql.artifact.copyFromLocalToFs.allowDestLocal`
         // to `true` when starting spark driver, we should only enable it for testing
         // purpose.
         throw new UnsupportedOperationException(
